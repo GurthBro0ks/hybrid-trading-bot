@@ -1,0 +1,22 @@
+# Rust
+/engine/target/
+/**/target/
+
+# Python
+/dashboard/.venv/
+/**/.venv/
+__pycache__/
+*.pyc
+
+# Data / DB
+/data/*.db
+/data/*.db-wal
+/data/*.db-shm
+
+# Logs
+*.log
+/engine/build.log
+
+# OS/editor
+.DS_Store
+Thumbs.db

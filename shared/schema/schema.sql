@@ -1,0 +1,28 @@
+CREATE TABLE IF NOT EXISTS ticks (
+  id INTEGER PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  price REAL NOT NULL,
+  volume REAL NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ticks_ts ON ticks(ts);
+
+CREATE TABLE IF NOT EXISTS signals (
+  id INTEGER PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value REAL NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_signals_ts ON signals(ts);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  side TEXT NOT NULL,
+  qty REAL NOT NULL,
+  price REAL,
+  status TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orders_ts ON orders(ts);

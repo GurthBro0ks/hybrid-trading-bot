@@ -1,8 +1,29 @@
 use anyhow::Result;
+use serde::Deserialize;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 use tokio::{sync::mpsc, time::{sleep, Duration}};
 use tracing::{info, warn};
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    app: AppConfig,
+    engine: EngineConfig,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppConfig {
+    symbol: String,
+    db_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EngineConfig {
+    tick_interval_ms: u64,
+    start_price: f64,
+    price_step: f64,
+    volume: f64,
+}
 
 #[derive(Debug, Clone)]
 struct Tick {
@@ -20,10 +41,10 @@ async fn make_pool(db_url: &str) -> Result<SqlitePool> {
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .after_connect(|conn, _meta| Box::pin(async move {
-            sqlx::query("PRAGMA journal_mode = WAL;").execute(conn).await?;
-            sqlx::query("PRAGMA synchronous = NORMAL;").execute(conn).await?;
-            sqlx::query("PRAGMA busy_timeout = 5000;").execute(conn).await?;
-            sqlx::query("PRAGMA temp_store = MEMORY;").execute(conn).await?;
+            sqlx::query("PRAGMA journal_mode = WAL;").execute(&mut *conn).await?;
+            sqlx::query("PRAGMA synchronous = NORMAL;").execute(&mut *conn).await?;
+            sqlx::query("PRAGMA busy_timeout = 5000;").execute(&mut *conn).await?;
+            sqlx::query("PRAGMA temp_store = MEMORY;").execute(&mut *conn).await?;
             Ok(())
         }))
         .connect(db_url)
@@ -43,16 +64,24 @@ async fn ensure_schema(pool: &SqlitePool, schema_path: &str) -> Result<()> {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter("info")
+        .with_target(false)
         .init();
 
-    let db_path = "/opt/hybrid-trading-bot/data/bot.db";
-    let db_url = format!("sqlite://{}", db_path);
-    let schema_path = "/opt/hybrid-trading-bot/shared/schema/schema.sql";
+    // Load config
+    let config_path = "config/config.toml";
+    let config_str = fs::read_to_string(config_path)?;
+    let config: Config = toml::from_str(&config_str)?;
 
-    info!("starting engine; db={}", db_path);
+    let db_path = config.app.db_path.clone();
+    let db_url = format!("sqlite://{}?mode=rwc", db_path);
+    let schema_path = "shared/schema/schema.sql";
+
+    info!("starting engine; symbol={} db={}", config.app.symbol, db_path);
 
     // Ensure data dir exists
-    std::fs::create_dir_all("/opt/hybrid-trading-bot/data")?;
+    if let Some(parent) = std::path::Path::new(&db_path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
 
     let pool = make_pool(&db_url).await?;
     ensure_schema(&pool, schema_path).await?;
@@ -62,21 +91,27 @@ async fn main() -> Result<()> {
     let (tx, mut rx) = mpsc::channel::<Tick>(100);
 
     // Ingestion mock (generates ticks)
+    let symbol = config.app.symbol.clone();
+    let start_price = config.engine.start_price;
+    let price_step = config.engine.price_step;
+    let volume = config.engine.volume;
+    let interval = config.engine.tick_interval_ms;
+
     tokio::spawn(async move {
-        let mut price = 100.0_f64;
+        let mut price = start_price;
         loop {
-            price += 0.05; // deterministic drift for proof
+            price += price_step; // deterministic drift for proof
             let t = Tick {
-                symbol: "SOL/USDC".to_string(),
+                symbol: symbol.clone(),
                 price,
-                volume: 1.0,
+                volume,
                 ts: now_ts(),
             };
             if tx.send(t).await.is_err() {
                 warn!("tick channel closed");
                 break;
             }
-            sleep(Duration::from_millis(500)).await;
+            sleep(Duration::from_millis(interval)).await;
         }
     });
 

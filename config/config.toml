@@ -1,0 +1,14 @@
+[app]
+symbol = "SOL/USDC"
+db_path = "data/bot.db"
+
+[engine]
+tick_interval_ms = 500
+start_price = 100.0
+price_step = 0.05
+volume = 1.0
+
+[dashboard]
+host = "127.0.0.1"
+port = 8501
+refresh_seconds = 1

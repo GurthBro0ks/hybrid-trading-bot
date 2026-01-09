@@ -1,0 +1,21 @@
+[Unit]
+Description=Hybrid Trading Bot Health Snapshot Logger
+Documentation=file:///opt/hybrid-trading-bot/docs/buglog/BUG_2026-01-09_nuc1_ops_health_timer.md
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=slimy
+Group=slimy
+WorkingDirectory=/opt/hybrid-trading-bot
+ExecStart=/opt/hybrid-trading-bot/scripts/snapshot_health.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hybrid-health-snapshot
+
+# Ensure script completes in reasonable time
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target

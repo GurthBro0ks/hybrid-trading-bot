@@ -1,0 +1,14 @@
+[Unit]
+Description=Hybrid Trading Bot Health Snapshot Timer
+Documentation=file:///opt/hybrid-trading-bot/docs/buglog/BUG_2026-01-09_nuc1_ops_health_timer.md
+Requires=hybrid-health-snapshot.service
+
+[Timer]
+# Run every 2 minutes
+OnBootSec=30s
+OnUnitActiveSec=2min
+Persistent=true
+RandomizedDelaySec=5s
+
+[Install]
+WantedBy=timers.target

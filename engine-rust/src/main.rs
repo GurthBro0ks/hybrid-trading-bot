@@ -28,6 +28,13 @@ use tracing::{info, warn};
 use config::{Config, ExecutionMode};
 use types::Metrics;
 
+/// Exit codes for deterministic control
+pub const EXIT_COMPLETE: i32 = 0;
+pub const EXIT_NETWORK: i32 = 10;
+pub const EXIT_PARSE: i32 = 11;
+pub const EXIT_CONFIG: i32 = 12;
+pub const EXIT_OVERLOAD: i32 = 13;
+
 /// Command line arguments
 #[derive(Parser, Debug)]
 #[command(name = "engine-rust")]
@@ -56,6 +63,10 @@ struct Args {
     /// WebSocket URL for mockws mode
     #[arg(long)]
     ws_url: Option<String>,
+
+    /// Sample every N ticks (1 = all, 10 = 10% ingestion)
+    #[arg(long)]
+    sample_every: Option<u64>,
 }
 
 #[tokio::main]
@@ -115,6 +126,7 @@ async fn main() -> Result<()> {
             "synthetic" => config::IngestMode::Synthetic,
             "replay" => config::IngestMode::Replay,
             "mockws" => config::IngestMode::MockWs,
+            "realws" => config::IngestMode::RealWs,
             _ => {
                 warn!(ingest = %ingest, "unknown ingest mode, defaulting to SYNTHETIC");
                 config::IngestMode::Synthetic
@@ -125,6 +137,11 @@ async fn main() -> Result<()> {
     // Override ws_url
     if let Some(url) = args.ws_url {
         config.engine.ws_url = Some(url);
+    }
+
+    // Override sample_every
+    if let Some(sample) = args.sample_every {
+        config.engine.sample_every = sample;
     }
 
     // Validate configuration (G0, G1: fail-closed for LIVE mode)

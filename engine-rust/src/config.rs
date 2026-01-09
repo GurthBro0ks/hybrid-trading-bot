@@ -95,6 +95,7 @@ pub enum IngestMode {
     Synthetic, // Deterministic generator
     Replay,    // From DB (ticks table)
     MockWs,    // WebSocket (ws://localhost...)
+    RealWs,    // Real WebSocket ingestion (Option A)
 }
 
 impl std::fmt::Display for IngestMode {
@@ -103,6 +104,7 @@ impl std::fmt::Display for IngestMode {
             IngestMode::Synthetic => write!(f, "SYNTHETIC"),
             IngestMode::Replay => write!(f, "REPLAY"),
             IngestMode::MockWs => write!(f, "MOCK_WS"),
+            IngestMode::RealWs => write!(f, "REAL_WS"),
         }
     }
 }
@@ -122,6 +124,8 @@ pub struct EngineConfig {
     pub run_seconds: Option<u64>,
     #[serde(default)]
     pub ws_url: Option<String>,
+    #[serde(default = "default_sample_every")]
+    pub sample_every: u64,
 }
 
 fn default_tick_interval() -> u64 {
@@ -136,6 +140,9 @@ fn default_heartbeat_interval() -> u64 {
 fn default_run_seconds() -> Option<u64> {
     None
 }
+fn default_sample_every() -> u64 {
+    1
+}
 
 impl Default for EngineConfig {
     fn default() -> Self {
@@ -146,6 +153,7 @@ impl Default for EngineConfig {
             heartbeat_interval_secs: default_heartbeat_interval(),
             run_seconds: default_run_seconds(),
             ws_url: None,
+            sample_every: default_sample_every(),
         }
     }
 }

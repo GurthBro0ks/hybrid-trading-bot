@@ -1,0 +1,14 @@
+# WebSocket Sources Configuration
+# Priority 1 sources are tried first. If connection fails or drops, next priority is tried.
+
+[[source]]
+name = "gemini_btcusd"
+url = "wss://api.gemini.com/v1/marketdata/btcusd"
+kind = "ticker"
+priority = 1
+
+[[source]]
+name = "binance_btcusdt"
+url = "wss://stream.binance.com:9443/ws/btcusdt@trade"
+kind = "ticker"
+priority = 99

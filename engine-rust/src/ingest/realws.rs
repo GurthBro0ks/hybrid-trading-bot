@@ -116,9 +116,15 @@ async fn run_source_session(
                                     // Gemini
                                     if let Ok(ticks) = parse_gemini_update(&text, symbol) {
                                         for tick in ticks {
+                                            metrics
+                                                .ingest_received
+                                                .fetch_add(1, Ordering::Relaxed);
                                             sequence += 1;
                                             if sequence % sample_every == 0 {
                                                 crate::ingest::send_tick(tick, tick_tx, persist_tx, metrics).await;
+                                                metrics
+                                                    .ingest_processed
+                                                    .fetch_add(1, Ordering::Relaxed);
                                                 metrics.tick_count.fetch_add(1, Ordering::Relaxed);
                                             }
                                         }
@@ -126,9 +132,15 @@ async fn run_source_session(
                                 } else if text.contains("\"e\":\"trade\"") || text.contains("\"e\":\"aggTrade\"") {
                                     // Binance
                                     if let Ok(tick) = parse_binance_trade(&text, symbol) {
+                                        metrics
+                                            .ingest_received
+                                            .fetch_add(1, Ordering::Relaxed);
                                         sequence += 1;
                                         if sequence % sample_every == 0 {
                                             crate::ingest::send_tick(tick, tick_tx, persist_tx, metrics).await;
+                                            metrics
+                                                .ingest_processed
+                                                .fetch_add(1, Ordering::Relaxed);
                                             metrics.tick_count.fetch_add(1, Ordering::Relaxed);
                                         }
                                     }

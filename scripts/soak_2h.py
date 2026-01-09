@@ -139,7 +139,8 @@ class SoakController:
         self.start_time = time.time()
         self.total_seconds = args.seconds
         self.ingest_mode = args.mode
-        self.stall_detector = StallDetector(args.db, stall_threshold_sec=45) # 45s stall threshold
+        self.psi_actions = args.psi_actions
+        self.stall_detector = StallDetector(args.db, stall_threshold_sec=args.stall_threshold_sec)
         
         # Ensure log dir exists
         os.makedirs(os.path.dirname(DECISION_LOG_PATH), exist_ok=True)
@@ -153,6 +154,7 @@ class SoakController:
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
             "run_id": self.run_id,
             "ingest_mode": self.ingest_mode,
+            "psi_actions": self.psi_actions,
             "state": self.current_state,
             "current_sample_every": self.get_current_sample_rate(),
             "action": action,
@@ -295,35 +297,44 @@ class SoakController:
                     print(f"[WARN] Failed to check service status: {e}")
 
                 # 4. PSI Monitor & Throttle
-                psi = get_psi()
-                cpu = psi.get("cpu_some_avg10", 0.0)
-                mem = psi.get("memory_some_avg10", 0.0)
-                io = psi.get("io_some_avg10", 0.0)
+                if self.psi_actions != "off":
+                    psi = get_psi()
+                    cpu = psi.get("cpu_some_avg10", 0.0)
+                    mem = psi.get("memory_some_avg10", 0.0)
+                    io = psi.get("io_some_avg10", 0.0)
 
-                pressure_reason = []
-                if cpu > CPU_LIMIT: pressure_reason.append(f"CPU {cpu}")
-                if mem > MEM_LIMIT: pressure_reason.append(f"MEM {mem}")
-                if io > IO_LIMIT: pressure_reason.append(f"IO {io}")
+                    pressure_reason = []
+                    if cpu > CPU_LIMIT: pressure_reason.append(f"CPU {cpu}")
+                    if mem > MEM_LIMIT: pressure_reason.append(f"MEM {mem}")
+                    if io > IO_LIMIT: pressure_reason.append(f"IO {io}")
 
-                if pressure_reason:
-                    self.consecutive_pressure += 1
-                    next_s, next_val = self.next_throttle_state(self.current_state)
-                    
-                    if next_s != self.current_state:
-                         self.current_state = next_s
-                         self.update_config_sample_rate(next_val)
-                         self.restart_engine(f"Throttling up to {next_s} due to PSI: {', '.join(pressure_reason)}")
+                    if pressure_reason:
+                        if self.psi_actions == "logonly":
+                            self.log_decision(
+                                "PSI_LOGONLY",
+                                f"PSI pressure observed (logonly): {', '.join(pressure_reason)}",
+                                psi,
+                            )
+                            self.consecutive_pressure = 0
+                        else:
+                            self.consecutive_pressure += 1
+                            next_s, next_val = self.next_throttle_state(self.current_state)
+                            
+                            if next_s != self.current_state:
+                                 self.current_state = next_s
+                                 self.update_config_sample_rate(next_val)
+                                 self.restart_engine(f"Throttling up to {next_s} due to PSI: {', '.join(pressure_reason)}")
+                            else:
+                                 # Already max throttle
+                                 self.log_decision("THROTTLE_MAX", f"Sustained pressure under max throttle: {', '.join(pressure_reason)}", psi)
+                                 if self.consecutive_pressure > 5:
+                                     self.log_decision("ABORT", "Sustained pressure under max throttle", psi)
+                                     break
                     else:
-                         # Already max throttle
-                         self.log_decision("THROTTLE_MAX", f"Sustained pressure under max throttle: {', '.join(pressure_reason)}", psi)
-                         if self.consecutive_pressure > 5:
-                             self.log_decision("ABORT", "Sustained pressure under max throttle", psi)
-                             break
-                else:
-                    self.consecutive_pressure = 0
-                    # Logic to allow recover? For safety in this phase, we generally latch up or hold. 
-                    # If we want to recover, we'd step down. For now, strict fail-safe or hold is fine.
-                    pass
+                        self.consecutive_pressure = 0
+                        # Logic to allow recover? For safety in this phase, we generally latch up or hold. 
+                        # If we want to recover, we'd step down. For now, strict fail-safe or hold is fine.
+                        pass
 
                 # 5. Stall Detection
                 is_stalled, stall_data = self.stall_detector.check()
@@ -347,6 +358,18 @@ if __name__ == "__main__":
     parser.add_argument("--seconds", type=int, default=7200, help="Soak duration seconds")
     parser.add_argument("--mode", type=str, default="realws", help="Initial ingest mode")
     parser.add_argument("--db", type=str, default="/opt/hybrid-trading-bot/data/bot.db")
+    parser.add_argument(
+        "--psi-actions",
+        choices=["on", "logonly", "off"],
+        default="on",
+        help="PSI actions: on=throttle/restart, logonly=record PSI only, off=skip PSI",
+    )
+    parser.add_argument(
+        "--stall-threshold-sec",
+        type=int,
+        default=45,
+        help="Seconds without tick progress before STALL triggers",
+    )
     args = parser.parse_args()
 
     controller = SoakController(args)

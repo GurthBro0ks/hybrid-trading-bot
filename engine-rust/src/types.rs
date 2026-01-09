@@ -180,6 +180,8 @@ pub struct Metrics {
     pub trade_count: std::sync::atomic::AtomicU64,
     pub persist_count: std::sync::atomic::AtomicU64,
     pub persist_errors: std::sync::atomic::AtomicU64,
+    pub ingest_received: std::sync::atomic::AtomicU64,
+    pub ingest_processed: std::sync::atomic::AtomicU64,
     pub backpressure_drops_tick: std::sync::atomic::AtomicU64,
     pub backpressure_drops_signal: std::sync::atomic::AtomicU64,
     pub backpressure_drops_persist: std::sync::atomic::AtomicU64,

@@ -272,6 +272,8 @@ async fn main() -> Result<()> {
                 trade_count = metrics_heartbeat.trade_count.load(Ordering::Relaxed),
                 persist_count = metrics_heartbeat.persist_count.load(Ordering::Relaxed),
                 persist_errors = metrics_heartbeat.persist_errors.load(Ordering::Relaxed),
+                ingest_received = metrics_heartbeat.ingest_received.load(Ordering::Relaxed),
+                ingest_processed = metrics_heartbeat.ingest_processed.load(Ordering::Relaxed),
                 bp_drops_tick = metrics_heartbeat
                     .backpressure_drops_tick
                     .load(Ordering::Relaxed),
@@ -331,6 +333,8 @@ async fn main() -> Result<()> {
         trade_count = metrics.trade_count.load(Ordering::Relaxed),
         persist_count = metrics.persist_count.load(Ordering::Relaxed),
         persist_errors = metrics.persist_errors.load(Ordering::Relaxed),
+        ingest_received = metrics.ingest_received.load(Ordering::Relaxed),
+        ingest_processed = metrics.ingest_processed.load(Ordering::Relaxed),
         bp_drops_tick = metrics.backpressure_drops_tick.load(Ordering::Relaxed),
         bp_drops_signal = metrics.backpressure_drops_signal.load(Ordering::Relaxed),
         risk_vetoes = metrics.risk_vetoes.load(Ordering::Relaxed),

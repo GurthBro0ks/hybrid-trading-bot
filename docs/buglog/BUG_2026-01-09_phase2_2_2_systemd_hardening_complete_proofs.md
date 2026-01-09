@@ -188,3 +188,86 @@ Drop-In: /etc/systemd/system/hybrid-engine.service.d
 
 ---
 
+## Proof 1: PSI Integrity ✓
+
+**Requirement**: Capture raw PSI kernel output + extracted float fields (no CPU% labeling)
+
+### Test Execution
+
+Ran 60-second soak with realws mode. System experienced high pressure (46-59% CPU stall), triggering throttle ladder escalation.
+
+### Evidence
+
+**Sample 1 - ENGINE_RESTART (Soak Start)**:
+```json
+{
+  "timestamp": "2026-01-09T15:38:28.006879Z",
+  "action": "ENGINE_RESTART",
+  "reason": "Soak Start",
+  "cpu_some_raw": "some avg10=59.82 avg60=56.70 avg300=59.10 total=388275413851",
+  "cpu_some_avg10": 59.82,
+  "cpu_full_raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+  "cpu_full_avg10": 0.0,
+  "memory_some_raw": "some avg10=0.34 avg60=0.09 avg300=0.01 total=13150766",
+  "memory_some_avg10": 0.34,
+  "memory_full_raw": "full avg10=0.34 avg60=0.09 avg300=0.01 total=7600450",
+  "memory_full_avg10": 0.34,
+  "io_some_raw": "some avg10=0.24 avg60=0.06 avg300=0.01 total=2014728365",
+  "io_some_avg10": 0.24,
+  "io_full_raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=431756271",
+  "io_full_avg10": 0.0
+}
+```
+
+**Sample 2 - ENGINE_RESTART (Throttle Escalation)**:
+```json
+{
+  "timestamp": "2026-01-09T15:38:35.172402Z",
+  "state": "THROTTLE1",
+  "action": "ENGINE_RESTART",
+  "reason": "Throttling up to THROTTLE1 due to PSI: CPU 48.0",
+  "cpu_some_raw": "some avg10=48.00 avg60=54.80 avg300=58.66 total=388277857993",
+  "cpu_some_avg10": 48.0
+}
+```
+
+**Sample 3 - ABORT (Sustained Pressure)**:
+```json
+{
+  "timestamp": "2026-01-09T15:39:06.956865Z",
+  "state": "THROTTLE3",
+  "action": "ABORT",
+  "reason": "Sustained pressure under max throttle",
+  "cpu_some_raw": "some avg10=46.71 avg60=52.38 avg300=57.67 total=388294154691",
+  "cpu_some_avg10": 46.71
+}
+```
+
+### Verification Checklist
+
+✅ **Raw PSI lines captured**: `cpu_some_raw` contains kernel format: `"some avg10=XX.XX avg60=YY.YY avg300=ZZ.ZZ total=NNNN"`
+
+✅ **Float extraction correct**: `cpu_some_avg10` is float parsed from avg10 field (59.82, 48.0, 46.71)
+
+✅ **NO CPU% mislabeling**: Fields named `cpu_some_avg10`, `cpu_full_avg10` (not "CPU%", not "utilization")
+
+✅ **All three metrics captured**: cpu, memory, io (both "some" and "full" variants)
+
+✅ **PSI semantic integrity**: Values represent **stall time percentage** (percentage of wall time tasks were waiting), NOT CPU utilization
+
+### Implementation References
+
+- **PSI collection**: soak_2h.py lines 52-75 (`get_psi()` function)
+- **Explicit documentation**: soak_2h.py lines 53-55 comment: "PSI is stall time (percentage of wall time tasks are waiting), expressed as floats in the kernel output. DO NOT label as CPU utilization."
+- **Field naming**: `{metric}_some_raw`, `{metric}_some_avg10`, `{metric}_full_raw`, `{metric}_full_avg10`
+
+### Status
+
+✅ **PSI Integrity Proof Complete**
+- Raw kernel output preserved
+- Float parsing accurate
+- Truthful naming maintained
+- All three metrics (cpu, memory, io) captured
+
+---
+

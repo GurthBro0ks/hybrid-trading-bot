@@ -23,7 +23,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{interval, Duration};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use config::{Config, ExecutionMode};
 use types::Metrics;
@@ -90,7 +90,20 @@ async fn main() -> Result<()> {
 
     // Load configuration
     let mut config = if std::path::Path::new(&args.config).exists() {
-        Config::load(&args.config)?
+        match Config::load(&args.config) {
+            Ok(config) => config,
+            Err(err) => {
+                if is_toml_parse_error(&err) {
+                    error!(
+                        config_path = %args.config,
+                        error = %err,
+                        "config TOML parse failed"
+                    );
+                    std::process::exit(EXIT_CONFIG);
+                }
+                return Err(err);
+            }
+        }
     } else {
         info!(
             config_path = %args.config,
@@ -326,4 +339,31 @@ async fn main() -> Result<()> {
 
     info!("engine-rust shutdown complete");
     Ok(())
+}
+
+fn is_toml_parse_error(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<toml::de::Error>().is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_toml_parse_error;
+    use crate::config::Config;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn invalid_toml_is_classified_as_config_error() {
+        let mut path = std::env::temp_dir();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time ok")
+            .as_nanos();
+        path.push(format!("engine_config_invalid_{unique}.toml"));
+
+        fs::write(&path, "invalid = [toml").expect("write invalid toml");
+        let err = Config::load(path.to_str().expect("path utf-8")).unwrap_err();
+        assert!(is_toml_parse_error(&err));
+        let _ = fs::remove_file(&path);
+    }
 }

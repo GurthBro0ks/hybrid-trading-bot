@@ -34,6 +34,7 @@ pub enum ReasonCode {
     // Signal generation reasons
     PeriodicTrigger,  // Deterministic N-tick trigger
     ThresholdCrossed, // Price threshold crossed (future)
+    SmaCrossover,     // SMA crossover (Phase 2.3)
 
     // Veto reasons
     RiskCap,   // I2: exposure exceeded
@@ -56,6 +57,7 @@ impl std::fmt::Display for ReasonCode {
         match self {
             ReasonCode::PeriodicTrigger => write!(f, "PERIODIC_TRIGGER"),
             ReasonCode::ThresholdCrossed => write!(f, "THRESHOLD_CROSSED"),
+            ReasonCode::SmaCrossover => write!(f, "SMA_CROSSOVER"),
             ReasonCode::RiskCap => write!(f, "RISK_CAP"),
             ReasonCode::StaleData => write!(f, "STALE_DATA"),
             ReasonCode::Submitted => write!(f, "SUBMITTED"),
@@ -217,6 +219,7 @@ mod tests {
     fn test_reason_code_display() {
         assert_eq!(format!("{}", ReasonCode::ShadowRecorded), "SHADOW_RECORDED");
         assert_eq!(format!("{}", ReasonCode::RiskCap), "RISK_CAP");
+        assert_eq!(format!("{}", ReasonCode::SmaCrossover), "SMA_CROSSOVER");
     }
 
     #[test]

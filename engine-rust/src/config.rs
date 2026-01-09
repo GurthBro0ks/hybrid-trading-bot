@@ -126,6 +126,8 @@ pub struct EngineConfig {
     pub ws_url: Option<String>,
     #[serde(default = "default_sample_every")]
     pub sample_every: u64,
+    #[serde(default)]
+    pub replay_file: Option<String>,
 }
 
 fn default_tick_interval() -> u64 {
@@ -154,6 +156,7 @@ impl Default for EngineConfig {
             run_seconds: default_run_seconds(),
             ws_url: None,
             sample_every: default_sample_every(),
+            replay_file: None,
         }
     }
 }

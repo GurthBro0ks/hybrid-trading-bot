@@ -1,56 +1,119 @@
-//! Strategy task - Deterministic signal generator
+//! Strategy task - SMA crossover
 //!
-//! Emits a signal every N ticks with reason codes (G4)
 //! Implements S6 (backpressure) and S8 (determinism)
 
 use crate::types::{EventId, Metrics, PersistEvent, ReasonCode, Side, Signal, Tick};
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
-/// Run the strategy task with deterministic signal generation
+const SMA_SHORT_WINDOW: usize = 5;
+const SMA_LONG_WINDOW: usize = 20;
+
+fn sma_iter(values: impl Iterator<Item = f64>, count: usize) -> f64 {
+    values.sum::<f64>() / count as f64
+}
+
+/// Run the strategy task with SMA crossover signal generation
 ///
 /// # Arguments
-/// * `signal_every_n_ticks` - Emit signal every N ticks
 /// * `tick_rx` - Channel to receive ticks from ingestion
 /// * `signal_tx` - Channel to send signals to execution
 /// * `persist_tx` - Channel to send signals to persistence
 /// * `metrics` - Shared metrics for heartbeat
 pub async fn run_strategy_task(
-    signal_every_n_ticks: u64,
     mut tick_rx: mpsc::Receiver<Tick>,
     signal_tx: mpsc::Sender<Signal>,
     persist_tx: mpsc::Sender<PersistEvent>,
     metrics: Arc<Metrics>,
 ) {
-    let mut tick_count: u64 = 0;
-    let mut last_side = Side::Buy;
+    let mut prices: VecDeque<f64> = VecDeque::with_capacity(SMA_LONG_WINDOW);
+    let mut prev_diff: Option<f64> = None;
 
     info!(
-        signal_every_n = signal_every_n_ticks,
-        "strategy task started (deterministic stub)"
+        short_window = SMA_SHORT_WINDOW,
+        long_window = SMA_LONG_WINDOW,
+        "strategy task started (sma crossover)"
     );
 
     while let Some(tick) = tick_rx.recv().await {
-        tick_count += 1;
+        prices.push_back(tick.price);
+        if prices.len() > SMA_LONG_WINDOW {
+            prices.pop_front();
+        }
 
-        // Deterministic signal emission every N ticks (S8)
-        if tick_count % signal_every_n_ticks == 0 {
-            // Alternate buy/sell for determinism
-            let side = if last_side == Side::Buy {
-                Side::Sell
-            } else {
-                Side::Buy
-            };
-            last_side = side;
+        let short_len = prices.len().min(SMA_SHORT_WINDOW);
+        let short_sma = sma_iter(
+            prices.iter().skip(prices.len() - short_len).copied(),
+            short_len,
+        );
+        let long_sma = sma_iter(prices.iter().copied(), prices.len());
+        let curr_diff = short_sma - long_sma;
 
+        if prices.len() < SMA_LONG_WINDOW {
+            debug!(
+                event = "SMA_CALC",
+                short = short_sma,
+                long = long_sma,
+                prev_diff = prev_diff.unwrap_or(0.0),
+                curr_diff = curr_diff,
+                emit = false,
+                action = "WARMUP",
+                "sma calc"
+            );
+            continue;
+        }
+
+        if prev_diff.is_none() {
+            debug!(
+                event = "SMA_CALC",
+                short = short_sma,
+                long = long_sma,
+                prev_diff = 0.0,
+                curr_diff = curr_diff,
+                emit = false,
+                action = "NONE",
+                "sma calc"
+            );
+            prev_diff = Some(curr_diff);
+            continue;
+        }
+
+        let prev = prev_diff.unwrap_or(0.0);
+        let mut emit = false;
+        let mut action = "NONE";
+
+        if prev <= 0.0 && curr_diff > 0.0 {
+            emit = true;
+            action = "BUY";
+        } else if prev >= 0.0 && curr_diff < 0.0 {
+            emit = true;
+            action = "SELL";
+        }
+
+        debug!(
+            event = "SMA_CALC",
+            short = short_sma,
+            long = long_sma,
+            prev_diff = prev,
+            curr_diff = curr_diff,
+            emit = emit,
+            action = action,
+            "sma calc"
+        );
+
+        prev_diff = Some(curr_diff);
+
+        if emit {
+            let side = if action == "BUY" { Side::Buy } else { Side::Sell };
             let signal = Signal {
                 event_id: EventId::new(),
                 symbol: tick.symbol.clone(),
                 side,
                 confidence: 0.75, // Fixed confidence for determinism
-                reason: ReasonCode::PeriodicTrigger,
+                reason: ReasonCode::SmaCrossover,
                 desired_size: 0.1, // Fixed size for shadow mode
                 ts: tick.ts,
             };
@@ -64,7 +127,7 @@ pub async fn run_strategy_task(
                 reason_code = %signal.reason,
                 confidence = signal.confidence,
                 desired_size = signal.desired_size,
-                tick_count = tick_count,
+                event = "SMA_CROSSOVER",
                 "signal generated"
             );
 
@@ -94,119 +157,50 @@ pub async fn run_strategy_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::now_ts_millis;
 
     #[tokio::test]
-    async fn test_signal_generation_every_n_ticks() {
+    async fn test_sma_crossover_emits_buy_and_sell() {
         let metrics = Arc::new(Metrics::new());
-        let (tick_tx, tick_rx) = mpsc::channel(10);
-        let (signal_tx, mut signal_rx) = mpsc::channel(10);
-        let (persist_tx, _persist_rx) = mpsc::channel(10);
+        let (tick_tx, tick_rx) = mpsc::channel(64);
+        let (signal_tx, mut signal_rx) = mpsc::channel(64);
+        let (persist_tx, _persist_rx) = mpsc::channel(64);
 
-        // Spawn strategy task
         let metrics_clone = metrics.clone();
         let handle = tokio::spawn(async move {
-            run_strategy_task(5, tick_rx, signal_tx, persist_tx, metrics_clone).await;
+            run_strategy_task(tick_rx, signal_tx, persist_tx, metrics_clone).await;
         });
 
-        // Send 10 ticks
-        for i in 0..10 {
+        let mut ts = 1_000_000i64;
+        for i in 0..50 {
+            let price = if i < 20 {
+                100.0
+            } else if i < 30 {
+                100.0 + (i as f64 - 19.0)
+            } else {
+                110.0 - (i as f64 - 29.0)
+            };
             let tick = Tick {
                 event_id: EventId::new(),
                 symbol: "TEST/USD".to_string(),
-                price: 100.0 + i as f64,
+                price,
                 volume: 1.0,
-                ts: now_ts_millis(),
+                ts,
             };
+            ts += 1;
             tick_tx.send(tick).await.unwrap();
         }
 
-        // Drop sender to close channel
         drop(tick_tx);
-
-        // Wait for task to complete
         handle.await.unwrap();
 
-        // Should have 2 signals (at tick 5 and 10)
         let mut signals = vec![];
         while let Ok(s) = signal_rx.try_recv() {
             signals.push(s);
         }
+
         assert_eq!(signals.len(), 2);
-
-        // First signal should be Sell (alternates from initial Buy)
-        assert_eq!(signals[0].side, Side::Sell);
-        // Second should be Buy
-        assert_eq!(signals[1].side, Side::Buy);
-    }
-
-    #[tokio::test]
-    async fn test_signal_determinism() {
-        // Same input should produce same signals
-        let metrics1 = Arc::new(Metrics::new());
-        let metrics2 = Arc::new(Metrics::new());
-
-        let (tick_tx1, tick_rx1) = mpsc::channel(10);
-        let (tick_tx2, tick_rx2) = mpsc::channel(10);
-        let (signal_tx1, mut signal_rx1) = mpsc::channel(10);
-        let (signal_tx2, mut signal_rx2) = mpsc::channel(10);
-        let (persist_tx1, _) = mpsc::channel(10);
-        let (persist_tx2, _) = mpsc::channel(10);
-
-        let m1 = metrics1.clone();
-        let m2 = metrics2.clone();
-
-        let h1 = tokio::spawn(async move {
-            run_strategy_task(3, tick_rx1, signal_tx1, persist_tx1, m1).await;
-        });
-        let h2 = tokio::spawn(async move {
-            run_strategy_task(3, tick_rx2, signal_tx2, persist_tx2, m2).await;
-        });
-
-        // Send identical tick sequences
-        for i in 0..6 {
-            let tick1 = Tick {
-                event_id: EventId::new(),
-                symbol: "TEST/USD".to_string(),
-                price: 100.0 + i as f64,
-                volume: 1.0,
-                ts: 1000000 + i,
-            };
-            let tick2 = Tick {
-                event_id: EventId::new(),
-                symbol: "TEST/USD".to_string(),
-                price: 100.0 + i as f64,
-                volume: 1.0,
-                ts: 1000000 + i,
-            };
-            tick_tx1.send(tick1).await.unwrap();
-            tick_tx2.send(tick2).await.unwrap();
-        }
-
-        drop(tick_tx1);
-        drop(tick_tx2);
-
-        h1.await.unwrap();
-        h2.await.unwrap();
-
-        // Collect signals
-        let mut signals1 = vec![];
-        let mut signals2 = vec![];
-        while let Ok(s) = signal_rx1.try_recv() {
-            signals1.push(s);
-        }
-        while let Ok(s) = signal_rx2.try_recv() {
-            signals2.push(s);
-        }
-
-        // Same number of signals
-        assert_eq!(signals1.len(), signals2.len());
-
-        // Same sides (S8: determinism)
-        for (s1, s2) in signals1.iter().zip(signals2.iter()) {
-            assert_eq!(s1.side, s2.side);
-            assert_eq!(s1.confidence, s2.confidence);
-            assert_eq!(s1.desired_size, s2.desired_size);
-        }
+        assert_eq!(signals[0].side, Side::Buy);
+        assert_eq!(signals[1].side, Side::Sell);
+        assert_eq!(signals[0].reason, ReasonCode::SmaCrossover);
     }
 }

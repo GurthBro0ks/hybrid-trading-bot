@@ -21,11 +21,11 @@ use anyhow::Result;
 use clap::Parser;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::{interval, Duration};
 use tracing::{error, info, warn};
 
-use config::{Config, ExecutionMode};
+use config::{Config, ExecutionMode, IngestMode};
 use types::Metrics;
 
 /// Exit codes for deterministic control
@@ -59,6 +59,10 @@ struct Args {
     /// Ingestion mode (synthetic, replay, mockws)
     #[arg(long)]
     ingest: Option<String>,
+
+    /// Replay file (JSONL) for ingest=replay
+    #[arg(long)]
+    replay_file: Option<String>,
 
     /// WebSocket URL for mockws mode
     #[arg(long)]
@@ -147,6 +151,11 @@ async fn main() -> Result<()> {
         };
     }
 
+    // Override replay file for ingest=replay
+    if let Some(replay_file) = args.replay_file {
+        config.engine.replay_file = Some(replay_file);
+    }
+
     // Override ws_url
     if let Some(url) = args.ws_url {
         config.engine.ws_url = Some(url);
@@ -164,8 +173,10 @@ async fn main() -> Result<()> {
         mode = %config.mode,
         symbol = %config.app.symbol,
         db_path = %config.app.db_path,
+        ingest_mode = %config.engine.ingest_mode,
+        replay_file = ?config.engine.replay_file,
+        sample_every = config.engine.sample_every,
         tick_interval_ms = config.engine.tick_interval_ms,
-        signal_every_n = config.engine.signal_every_n_ticks,
         heartbeat_secs = config.engine.heartbeat_interval_secs,
         run_seconds = ?config.engine.run_seconds,
         "configuration loaded (G0: shadow mode default enforced)"
@@ -213,17 +224,24 @@ async fn main() -> Result<()> {
     let metrics_persist = metrics.clone();
     let metrics_heartbeat = metrics.clone();
 
-    let signal_every_n = config.engine.signal_every_n_ticks;
     let mode = config.mode;
     let risk_caps = config.risk_caps.clone();
     let heartbeat_interval = config.engine.heartbeat_interval_secs;
     let run_seconds = config.engine.run_seconds;
+    let replay_mode = config.engine.ingest_mode == IngestMode::Replay;
 
     // Spawn ingest task
     let shutdown_rx_ingest = shutdown_tx.subscribe();
     let engine_config = config.engine.clone();
     let db_pool = pool.clone(); // Needed for replay
-    
+
+    let (replay_done_tx, mut replay_done_rx) = if replay_mode {
+        let (tx, rx) = oneshot::channel();
+        (Some(tx), Some(rx))
+    } else {
+        (None, None)
+    };
+
     let ingest_handle = tokio::spawn(async move {
         ingest::run_ingest_task(
             config.app.symbol,
@@ -233,6 +251,7 @@ async fn main() -> Result<()> {
             persist_tx_ingest,
             metrics_ingest,
             shutdown_rx_ingest,
+            replay_done_tx,
         )
         .await;
     });
@@ -240,7 +259,6 @@ async fn main() -> Result<()> {
     // Spawn strategy task
     let strategy_handle = tokio::spawn(async move {
         strategy::run_strategy_task(
-            signal_every_n,
             tick_rx,
             signal_tx,
             persist_tx_strategy,
@@ -296,6 +314,16 @@ async fn main() -> Result<()> {
         info!(seconds = secs, "running for fixed duration");
         tokio::time::sleep(Duration::from_secs(secs)).await;
         warn!("fixed duration elapsed, initiating shutdown");
+    } else if replay_done_rx.is_some() {
+        info!("waiting for replay completion or shutdown signal");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                warn!("shutdown signal received (S13: graceful shutdown)");
+            }
+            _ = &mut replay_done_rx.as_mut().expect("replay rx") => {
+                warn!("replay completed, initiating shutdown");
+            }
+        }
     } else {
         // Wait for SIGINT/CTRL-C (S13: graceful shutdown)
         info!("waiting for shutdown signal (CTRL-C)");
@@ -340,6 +368,22 @@ async fn main() -> Result<()> {
         risk_vetoes = metrics.risk_vetoes.load(Ordering::Relaxed),
         "FINAL METRICS"
     );
+
+    if config.engine.ingest_mode == IngestMode::Replay {
+        let replay_file = config
+            .engine
+            .replay_file
+            .clone()
+            .unwrap_or_else(|| "NONE".to_string());
+        info!(
+            ingest = "replay",
+            replay_file = %replay_file,
+            db = %config.app.db_path,
+            ticks_read = metrics.ingest_received.load(Ordering::Relaxed),
+            signals_emitted = metrics.signal_count.load(Ordering::Relaxed),
+            "replay summary"
+        );
+    }
 
     info!("engine-rust shutdown complete");
     Ok(())

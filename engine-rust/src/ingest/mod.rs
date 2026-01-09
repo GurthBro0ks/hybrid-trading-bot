@@ -9,10 +9,12 @@ pub mod ws_sources;
 use crate::config::{EngineConfig, IngestMode};
 use crate::types::{EventId, Metrics, PersistEvent, Tick};
 use futures::{SinkExt, StreamExt};
+use serde::Deserialize;
 use sqlx::SqlitePool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tracing::{error, info, warn};
@@ -26,6 +28,7 @@ pub async fn run_ingest_task(
     persist_tx: mpsc::Sender<PersistEvent>,
     metrics: Arc<Metrics>,
     shutdown: tokio::sync::broadcast::Receiver<()>,
+    replay_done: Option<oneshot::Sender<()>>,
 ) {
     match config.ingest_mode {
         IngestMode::Synthetic => {
@@ -41,7 +44,30 @@ pub async fn run_ingest_task(
             .await
         }
         IngestMode::Replay => {
-            run_replay(symbol, config.sample_every, pool, tick_tx, persist_tx, metrics, shutdown).await
+            if let Some(replay_file) = config.replay_file.clone() {
+                run_replay_file(
+                    replay_file,
+                    config.sample_every,
+                    tick_tx,
+                    persist_tx,
+                    metrics,
+                    shutdown,
+                    replay_done,
+                )
+                .await;
+            } else {
+                run_replay_db(
+                    symbol,
+                    config.sample_every,
+                    pool,
+                    tick_tx,
+                    persist_tx,
+                    metrics,
+                    shutdown,
+                    replay_done,
+                )
+                .await;
+            }
         }
         IngestMode::MockWs => {
             let url = config.ws_url.unwrap_or_else(|| "ws://localhost:9001".to_string());
@@ -125,14 +151,111 @@ async fn run_synthetic(
     }
 }
 
-async fn run_replay(
-    symbol: String,
+#[derive(Debug, Deserialize)]
+struct ReplayTick {
+    pub symbol: String,
+    pub price: f64,
+    pub volume: f64,
+    pub ts: i64,
+    #[serde(default)]
+    pub event_id: Option<EventId>,
+}
+
+async fn run_replay_file(
+    replay_file: String,
+    sample_every: u64,
+    tick_tx: mpsc::Sender<Tick>,
+    persist_tx: mpsc::Sender<PersistEvent>,
+    metrics: Arc<Metrics>,
+    mut shutdown: tokio::sync::broadcast::Receiver<()>,
+    replay_done: Option<oneshot::Sender<()>>,
+) {
+    info!(
+        mode = "REPLAY",
+        replay_file = %replay_file,
+        sample_every = sample_every,
+        "ingest task started"
+    );
+
+    let file = match tokio::fs::File::open(&replay_file).await {
+        Ok(file) => file,
+        Err(err) => {
+            error!(error = %err, replay_file = %replay_file, "replay file open failed");
+            return;
+        }
+    };
+
+    let reader = BufReader::new(file);
+    let mut lines = reader.lines();
+    let mut sequence = 0u64;
+    let mut ticks_read = 0u64;
+
+    loop {
+        if shutdown.try_recv().is_ok() {
+            info!("replay received shutdown");
+            break;
+        }
+
+        match lines.next_line().await {
+            Ok(Some(line)) => {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+
+                ticks_read += 1;
+                metrics.ingest_received.fetch_add(1, Ordering::Relaxed);
+
+                let parsed: ReplayTick = match serde_json::from_str(line) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        warn!(error = %err, "replay line parse failed");
+                        continue;
+                    }
+                };
+
+                sequence += 1;
+                if sequence % sample_every != 0 {
+                    continue;
+                }
+
+                let tick = Tick {
+                    event_id: parsed.event_id.unwrap_or_else(EventId::new),
+                    symbol: parsed.symbol,
+                    price: parsed.price,
+                    volume: parsed.volume,
+                    ts: parsed.ts,
+                };
+
+                send_tick(tick, &tick_tx, &persist_tx, &metrics).await;
+                metrics.tick_count.fetch_add(1, Ordering::Relaxed);
+                metrics.ingest_processed.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(None) => {
+                info!(ticks_read = ticks_read, "replay finished (file)");
+                break;
+            }
+            Err(err) => {
+                error!(error = %err, "replay read failed");
+                break;
+            }
+        }
+    }
+
+    if let Some(done) = replay_done {
+        let _ = done.send(());
+    }
+}
+
+async fn run_replay_db(
+    _symbol: String,
     sample_every: u64,
     pool: SqlitePool,
     tick_tx: mpsc::Sender<Tick>,
     persist_tx: mpsc::Sender<PersistEvent>,
     metrics: Arc<Metrics>,
     mut shutdown: tokio::sync::broadcast::Receiver<()>,
+    replay_done: Option<oneshot::Sender<()>>,
 ) {
     info!(mode = "REPLAY", sample_every = sample_every, "ingest task started");
 
@@ -166,6 +289,7 @@ async fn run_replay(
                          break; 
                      }
                      
+                     metrics.ingest_received.fetch_add(1, Ordering::Relaxed);
                      sequence += 1;
                      if sequence % sample_every != 0 {
                          continue;
@@ -181,6 +305,7 @@ async fn run_replay(
                      
                      send_tick(tick, &tick_tx, &persist_tx, &metrics).await;
                      metrics.tick_count.fetch_add(1, Ordering::Relaxed);
+                     metrics.ingest_processed.fetch_add(1, Ordering::Relaxed);
                      
                      tokio::task::yield_now().await;
                 }
@@ -191,6 +316,10 @@ async fn run_replay(
                 break;
             }
         }
+    }
+
+    if let Some(done) = replay_done {
+        let _ = done.send(());
     }
 }
 

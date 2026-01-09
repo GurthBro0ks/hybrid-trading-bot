@@ -7,7 +7,7 @@ tick_interval_ms = 500
 start_price = 100.0
 price_step = 0.05
 volume = 1.0
-sample_every = 20
+sample_every = 1
 
 [dashboard]
 host = "127.0.0.1"

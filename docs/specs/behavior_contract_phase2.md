@@ -93,7 +93,32 @@ L4 — Must never silently swallow an execution error: every failure is logged +
 
 ---
 
-## 3) Phase 2 Runtime Responsibilities (Task Pipeline)
+## 3) System Lifecycle & Recovery Protocol (Phase 2.2.3+)
+
+Exit codes are contractually significant. The engine must exit with these codes and systemd must be configured accordingly.
+
+Required systemd policy:
+
+- Restart=on-failure
+- RestartPreventExitStatus=12
+- Optional: SuccessExitStatus=12 (for dashboards only)
+
+Exit code contract (stable):
+
+| Exit Code | Name | Meaning | Expected systemd action |
+| --- | --- | --- | --- |
+| 0 | COMPLETE | Clean shutdown / operator stop | No restart |
+| 10 | NETWORK | Network/WS failure requiring restart | Restart (on-failure) |
+| 11 | PARSE | Non-config parse failure requiring restart | Restart (on-failure) |
+| 12 | CONFIG | Invalid/unusable configuration | No restart (prevented) |
+| 13 | OVERLOAD | Resource pressure or safety shutdown | Restart (on-failure) |
+| 1 | CRASH | Unhandled panic/abort | Restart (on-failure) |
+
+Retry semantics are delegated to systemd; do not claim a retry count unless implemented and measured.
+
+---
+
+## 4) Phase 2 Runtime Responsibilities (Task Pipeline)
 
 The Rust backend is composed of these Tokio tasks:
 
@@ -105,7 +130,7 @@ The Rust backend is composed of these Tokio tasks:
 
 ---
 
-## 4) Database Requirements (SQLite + SQLx)
+## 5) Database Requirements (SQLite + SQLx)
 
 Schema must support time-series queries:
 
@@ -121,7 +146,7 @@ SQLx requirements:
 
 ---
 
-## 5) Behavioral Scenarios (BDD: Given/When/Then)
+## 6) Behavioral Scenarios (BDD: Given/When/Then)
 
 S1 — Startup applies DB PRAGMAs and schema migration
 
@@ -235,7 +260,7 @@ S15 — CPU contention resilience
 
 ---
 
-## 6) Gates
+## 7) Gates
 
 G1 — LIVE_MODE Unlock Gate (fail closed)
 LIVE_MODE can only run when all are true:
@@ -252,7 +277,7 @@ LIVE_MODE can only run when all are true:
 
 ---
 
-## 7) Verification Matrix (what proves what)
+## 8) Verification Matrix (what proves what)
 
 You must not claim a behavior is “done” without proof.
 
@@ -282,7 +307,7 @@ Evidence artifacts:
 
 ---
 
-## 8) Phase 2 Completion Definition
+## 9) Phase 2 Completion Definition
 
 Phase 2 is complete when:
 
@@ -290,7 +315,7 @@ Phase 2 is complete when:
 - I1–I6 are covered by automated tests (property tests for I1–I4 minimum), and
 - SHADOW_MODE can run continuously without crash while persisting ticks/signals/orders.
 
-## 9) Proof Pointers (Phase 2.1 - 2.2)
+## 10) Proof Pointers (Phase 2.1 - 2.2)
 
 - **Phase 2.0 (Baseline)**: `docs/buglog/BUG_2026-01-08_phase2_0_baseline.md`
 - **Phase 2.1 (Ingest Replay/Mock)**: `docs/buglog/BUG_2026-01-09_phase2_1_ingestion_replay_mockws.md`

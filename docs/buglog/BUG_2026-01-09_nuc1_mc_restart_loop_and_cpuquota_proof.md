@@ -646,3 +646,19 @@ Exit status: 0
 
 ### 2026-01-09T11:00:34+00:00
 $ cd /opt/hybrid-trading-bot && git add docs/buglog/BUG_2026-01-09_nuc1_mc_restart_loop_and_cpuquota_proof.md ops/systemd/mc-paper.service.d/30-restart-sane.conf
+Exit status: 0
+
+### 2026-01-09T11:00:34+00:00
+$ cd /opt/hybrid-trading-bot && git commit -m "ops: stabilize mc-paper restart behavior + prove CPU quota"
+[main a195519] ops: stabilize mc-paper restart behavior + prove CPU quota
+ 2 files changed, 657 insertions(+)
+ create mode 100644 docs/buglog/BUG_2026-01-09_nuc1_mc_restart_loop_and_cpuquota_proof.md
+ create mode 100644 ops/systemd/mc-paper.service.d/30-restart-sane.conf
+Exit status: 0
+
+### 2026-01-09T11:00:34+00:00
+$ cd /opt/hybrid-trading-bot && git push
+To github.com:GurthBro0ks/hybrid-trading-bot.git
+   422fc10..a195519  main -> main
+Exit status: 0
+

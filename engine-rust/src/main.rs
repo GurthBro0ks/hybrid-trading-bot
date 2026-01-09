@@ -48,6 +48,14 @@ struct Args {
     /// Path to database
     #[arg(long)]
     db: Option<String>,
+
+    /// Ingestion mode (synthetic, replay, mockws)
+    #[arg(long)]
+    ingest: Option<String>,
+
+    /// WebSocket URL for mockws mode
+    #[arg(long)]
+    ws_url: Option<String>,
 }
 
 #[tokio::main]
@@ -99,6 +107,24 @@ async fn main() -> Result<()> {
     // Override db path from CLI
     if let Some(db_path) = args.db {
         config.app.db_path = db_path;
+    }
+
+    // Override ingest mode
+    if let Some(ingest) = args.ingest {
+        config.engine.ingest_mode = match ingest.to_lowercase().as_str() {
+            "synthetic" => config::IngestMode::Synthetic,
+            "replay" => config::IngestMode::Replay,
+            "mockws" => config::IngestMode::MockWs,
+            _ => {
+                warn!(ingest = %ingest, "unknown ingest mode, defaulting to SYNTHETIC");
+                config::IngestMode::Synthetic
+            }
+        };
+    }
+
+    // Override ws_url
+    if let Some(url) = args.ws_url {
+        config.engine.ws_url = Some(url);
     }
 
     // Validate configuration (G0, G1: fail-closed for LIVE mode)
@@ -157,8 +183,6 @@ async fn main() -> Result<()> {
     let metrics_persist = metrics.clone();
     let metrics_heartbeat = metrics.clone();
 
-    let symbol = config.app.symbol.clone();
-    let tick_interval = config.engine.tick_interval_ms;
     let signal_every_n = config.engine.signal_every_n_ticks;
     let mode = config.mode;
     let risk_caps = config.risk_caps.clone();
@@ -167,10 +191,14 @@ async fn main() -> Result<()> {
 
     // Spawn ingest task
     let shutdown_rx_ingest = shutdown_tx.subscribe();
+    let engine_config = config.engine.clone();
+    let db_pool = pool.clone(); // Needed for replay
+    
     let ingest_handle = tokio::spawn(async move {
         ingest::run_ingest_task(
-            symbol,
-            tick_interval,
+            config.app.symbol,
+            engine_config,
+            db_pool,
             tick_tx,
             persist_tx_ingest,
             metrics_ingest,

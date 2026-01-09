@@ -88,9 +88,30 @@ impl Default for ChannelConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum IngestMode {
+    #[default]
+    Synthetic, // Deterministic generator
+    Replay,    // From DB (ticks table)
+    MockWs,    // WebSocket (ws://localhost...)
+}
+
+impl std::fmt::Display for IngestMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IngestMode::Synthetic => write!(f, "SYNTHETIC"),
+            IngestMode::Replay => write!(f, "REPLAY"),
+            IngestMode::MockWs => write!(f, "MOCK_WS"),
+        }
+    }
+}
+
 /// Engine configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct EngineConfig {
+    #[serde(default)]
+    pub ingest_mode: IngestMode,
     #[serde(default = "default_tick_interval")]
     pub tick_interval_ms: u64,
     #[serde(default = "default_signal_every_n")]
@@ -99,6 +120,8 @@ pub struct EngineConfig {
     pub heartbeat_interval_secs: u64,
     #[serde(default = "default_run_seconds")]
     pub run_seconds: Option<u64>,
+    #[serde(default)]
+    pub ws_url: Option<String>,
 }
 
 fn default_tick_interval() -> u64 {
@@ -117,10 +140,12 @@ fn default_run_seconds() -> Option<u64> {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
+            ingest_mode: IngestMode::default(),
             tick_interval_ms: default_tick_interval(),
             signal_every_n_ticks: default_signal_every_n(),
             heartbeat_interval_secs: default_heartbeat_interval(),
             run_seconds: default_run_seconds(),
+            ws_url: None,
         }
     }
 }

@@ -27,6 +27,8 @@ class RiskRules:
     model_horizon_sec: int = 300
     model_warmup_samples: int = 5
     shadow_min_days: int = 1
+    thin_book_threshold_depth_usd: float = 20.0
+    thin_book_threshold_qty: float = 5.0
 
     @classmethod
     def from_env(cls) -> "RiskRules":
@@ -66,6 +68,12 @@ class RiskRules:
                 "STALE_EDGE_MODEL_WARMUP_SAMPLES", cls.model_warmup_samples
             ),
             shadow_min_days=_get_int("STALE_EDGE_SHADOW_MIN_DAYS", cls.shadow_min_days),
+            thin_book_threshold_depth_usd=_get_float(
+                "STALE_EDGE_THIN_BOOK_THRESHOLD_DEPTH_USD", cls.thin_book_threshold_depth_usd
+            ),
+            thin_book_threshold_qty=_get_float(
+                "STALE_EDGE_THIN_BOOK_THRESHOLD_QTY", cls.thin_book_threshold_qty
+            ),
         )
 
     def edge_min(self) -> float:

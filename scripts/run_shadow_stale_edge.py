@@ -42,6 +42,10 @@ def _simulate_polymarket_book(
         yes_ask=yes_ask,
         no_bid=no_bid,
         no_ask=no_ask,
+        yes_bid_qty=1000.0,
+        yes_ask_qty=1000.0,
+        no_bid_qty=1000.0,
+        no_ask_qty=1000.0,
         ts_ms=now_ms,
     )
 
@@ -267,6 +271,10 @@ def main() -> int:
                 "edge_no": decision.edge_no or "",
                 "action": decision.action,
                 "reason": decision.reason,
+                "thin_book_reason": decision.thin_book_reason or "",
+                "thin_book_threshold_depth_usd": decision.thin_book_threshold_depth_usd or "",
+                "thin_book_threshold_qty": decision.thin_book_threshold_qty or "",
+                "thin_book_spread_bps": decision.thin_book_spread_bps or "",
                 "params_hash": decision.params_hash,
             }
         )

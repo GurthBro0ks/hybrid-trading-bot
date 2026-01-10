@@ -26,6 +26,10 @@ COLUMNS: List[str] = [
     "edge_no",
     "action",
     "reason",
+    "thin_book_reason",
+    "thin_book_threshold_depth_usd",
+    "thin_book_threshold_qty",
+    "thin_book_spread_bps",
     "params_hash",
 ]
 

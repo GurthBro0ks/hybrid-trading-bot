@@ -45,10 +45,14 @@ async fn main() {
 }
 
 async fn handle_connection(stream: TcpStream) {
-    let addr = stream.peer_addr().expect("connected streams should have a peer address");
+    let addr = stream
+        .peer_addr()
+        .expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
-    let ws_stream = accept_async(stream).await.expect("Error during the websocket handshake occurred");
+    let ws_stream = accept_async(stream)
+        .await
+        .expect("Error during the websocket handshake occurred");
     info!("New WebSocket connection: {}", addr);
 
     let (mut write, mut read) = ws_stream.split();
@@ -56,17 +60,17 @@ async fn handle_connection(stream: TcpStream) {
     // Spawn ticker task
     let mut timer = interval(Duration::from_millis(500));
     let mut price = 100.0;
-    
+
     // We need to handle incoming messages (Pings/Close) too
     let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
-    
+
     let read_handle = tokio::spawn(async move {
         while let Some(msg) = read.next().await {
             match msg {
                 Ok(Message::Close(_)) => break,
                 Ok(Message::Ping(data)) => {
-                     // Auto-pong is handled by tungstenite usually, but we can reply if needed? 
-                     // Tungstenite handles Pings automatically by default in `read`.
+                    // Auto-pong is handled by tungstenite usually, but we can reply if needed?
+                    // Tungstenite handles Pings automatically by default in `read`.
                 }
                 Err(_) => break,
                 _ => {}
@@ -98,6 +102,6 @@ async fn handle_connection(stream: TcpStream) {
              }
         }
     }
-    
+
     info!("Connection closed: {}", addr);
 }

@@ -12,10 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from feeds.binance_spot import get_mid_price
+from feeds.router import get_official_price
 from recorder.trade_journal import TradeJournal
 from risk.rules import ExposureTracker, RateLimiter, RiskRules
 from sources.resolution_source import is_unknown, resolution_source_from_metadata
+from strategies.reasons import ReasonCode
 from strategies.stale_edge import BookTop, Decision, StaleEdgeStrategy
 
 
@@ -56,7 +57,7 @@ def _apply_rate_limits(
         if not order_limiter.allow(now_ms):
             return Decision(
                 action="NO_TRADE",
-                reason="RATE_LIMIT",
+                reason=ReasonCode.RATE_LIMIT,
                 side=None,
                 price=None,
                 size=None,
@@ -71,7 +72,7 @@ def _apply_rate_limits(
         if not cancel_limiter.allow(now_ms):
             return Decision(
                 action="NO_TRADE",
-                reason="CANCEL_RATE_LIMIT",
+                reason=ReasonCode.CANCEL_RATE_LIMIT,
                 side=None,
                 price=None,
                 size=None,
@@ -93,7 +94,7 @@ def _apply_exposure_cap(
     if not exposure.can_add(market_id, decision.size, rules):
         return Decision(
             action="NO_TRADE",
-            reason="EXPOSURE_CAP",
+            reason=ReasonCode.EXPOSURE_CAP,
             side=None,
             price=None,
             size=None,
@@ -111,6 +112,7 @@ def _apply_exposure_cap(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--minutes", type=int, default=1)
+    parser.add_argument("--mode", choices=["live", "sim"], default="live")
     parser.add_argument("--loop-interval-sec", type=float, default=1.0)
     parser.add_argument("--market-id", default="pm-demo-market")
     parser.add_argument(
@@ -163,11 +165,12 @@ def main() -> int:
         now_ms = _now_ms()
         official_mid = None
         official_ts_ms = None
+        source_name = "NONE"
 
         if not is_unknown(source) and not args.force_feed_failure:
-            feed = get_mid_price(symbol=source.symbol.replace("/", ""))
+            feed = get_official_price(symbol_pair=source.symbol)
             if feed:
-                official_mid, official_ts_ms, _ = feed
+                official_mid, official_ts_ms, _, source_name = feed
                 last_official_ok_ms = now_ms
             else:
                 logger.warning("OFFICIAL_FEED_UNAVAILABLE")
@@ -182,17 +185,26 @@ def main() -> int:
                 feed_abort = True
 
         fair_hint = strategy.model.fair_up_prob() or 0.5
-        book = _simulate_polymarket_book(
-            fair_prob=fair_hint,
-            now_ms=now_ms,
-            spread=args.book_spread,
-            bias=args.book_bias,
-        )
+        mock_used = False
+        if args.mode == "sim":
+            book = _simulate_polymarket_book(
+                fair_prob=fair_hint,
+                now_ms=now_ms,
+                spread=args.book_spread,
+                bias=args.book_bias,
+            )
+            mock_used = True
+        else:
+            # LIVE MODE: prohibit mocks. 
+            # In a real system, we'd fetch from venue API. 
+            # For this exercise, we fail closed if no real data source is provided.
+            book = None
+            mock_used = False
 
         if is_unknown(source):
             decision = Decision(
                 action="NO_TRADE",
-                reason="RESOLUTION_SOURCE_UNKNOWN",
+                reason=ReasonCode.RESOLUTION_SOURCE_UNKNOWN,
                 side=None,
                 price=None,
                 size=None,
@@ -206,7 +218,21 @@ def main() -> int:
         elif feed_abort:
             decision = Decision(
                 action="NO_TRADE",
-                reason="FEED_STALE_ABORT",
+                reason=ReasonCode.FEED_STALE_ABORT,
+                side=None,
+                price=None,
+                size=None,
+                implied_yes=None,
+                implied_no=None,
+                fair_up_prob=None,
+                edge_yes=None,
+                edge_no=None,
+                params_hash="",
+            )
+        elif book is None:
+            decision = Decision(
+                action="NO_TRADE",
+                reason=ReasonCode.BOOK_DATA_MISSING,
                 side=None,
                 price=None,
                 size=None,
@@ -239,13 +265,13 @@ def main() -> int:
             edge = max(decision.edge_yes or 0.0, decision.edge_no or 0.0)
             edge_sum += edge
             edge_count += 1
-        if decision.reason in {"STALE_FEED", "STALE_BOOK", "OFFICIAL_FEED_MISSING", "FEED_STALE_ABORT"}:
+        if decision.reason in {ReasonCode.STALE_FEED, ReasonCode.STALE_BOOK, ReasonCode.OFFICIAL_FEED_MISSING, ReasonCode.FEED_STALE_ABORT}:
             staleness_refusals += 1
-        if decision.reason == "END_TIME_ANOMALY":
+        if decision.reason == ReasonCode.END_TIME_ANOMALY:
             end_time_anomalies += 1
 
         official_age_ms = now_ms - official_ts_ms if official_ts_ms is not None else ""
-        book_age_ms = now_ms - book.ts_ms if book.ts_ms is not None else ""
+        book_age_ms = now_ms - book.ts_ms if book is not None and book.ts_ms is not None else ""
 
         journal.record_decision(
             {
@@ -254,12 +280,14 @@ def main() -> int:
                 "now": now_ms,
                 "market_end_ts": market_end_ts_ms,
                 "official_mid": official_mid or "",
+                "official_source": source_name,
                 "official_age_ms": official_age_ms,
-                "pm_yes_bid": book.yes_bid,
-                "pm_yes_ask": book.yes_ask,
-                "pm_no_bid": book.no_bid,
-                "pm_no_ask": book.no_ask,
-                "pm_book_age_ms": book_age_ms,
+                "pm_yes_bid": book.yes_bid if book else "",
+                "pm_yes_ask": book.yes_ask if book else "",
+                "pm_no_bid": book.no_bid if book else "",
+                "pm_no_ask": book.no_ask if book else "",
+                "pm_book_age_ms": book_age_ms if book else "",
+                "mock_used": str(mock_used).lower(),
                 "implied_yes": decision.implied_yes or "",
                 "implied_no": decision.implied_no or "",
                 "fair_up_prob": decision.fair_up_prob or "",

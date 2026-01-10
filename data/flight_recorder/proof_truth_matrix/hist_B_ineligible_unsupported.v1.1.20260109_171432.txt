@@ -1,0 +1,2 @@
+=== Histogram for B_ineligible_unsupported.v1.1.20260109_171432 ===
+UNSUPPORTED_RULES	19

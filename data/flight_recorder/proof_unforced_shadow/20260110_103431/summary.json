@@ -1,0 +1,21 @@
+{
+  "timestamp": "20260110_103431",
+  "targets": [
+    {
+      "ticker": "KXBTCMAX150-25-26JAN31-149999.99",
+      "status": "DONE",
+      "verify": "PASS",
+      "stats": {
+        "entries": 0,
+        "exits": 0,
+        "no_trades": 99,
+        "reasons": {
+          "BOOK_SANITY": 1,
+          "BOOK_TOKEN_NOT_FOUND": 12,
+          "COOLDOWN": 86
+        }
+      }
+    }
+  ],
+  "overall_status": "PENDING"
+}

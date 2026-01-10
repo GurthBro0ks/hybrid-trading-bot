@@ -1,0 +1,11 @@
+=== Kalshi Venue Smoke Test (Ticker: KXBTC-26JAN1617-B91250) ===
+Testing: GET /markets/KXBTC-26JAN1617-B91250
+PASS: Found market. Classifies as: KALSHI_PRICE_THRESHOLD Tier: FULLY_ELIGIBLE
+      Status: active | Close: 2026-01-16T22:00:00Z (560501s remaining)
+      Rules: Kalshi BTC-USD between 91000 @ 2026-01-16T22:00:00+00:00
+Testing: GET /markets/KXBTC-26JAN1617-B91250/orderbook?depth=10
+PASS: Orderbook fetched in 49.1ms
+      Levels: YES=3 NO=15 TOTAL=18
+      Prices: YES_BID=4 YES_ASK=7
+              NO_BID =93  NO_ASK =96
+PASS: Active with liquidity.

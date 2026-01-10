@@ -1,0 +1,14 @@
+INFO: Verifying data/flight_recorder/proof_shadow_paper/20260110_101813/journal.csv...
+INFO: Checking Provenance Flags...
+INFO: Found BOOK_SANITY row.
+INFO: Verifying PnL Math...
+INFO: Tracked ENTRY: YES 14.3 @ 0.07
+WARNING: Double Entry for KXBTC-26JAN1617-B91250? currently simple verifier expects 1 position.
+INFO: Tracked ENTRY: YES 14.3 @ 0.07
+WARNING: Double Entry for KXBTC-26JAN1617-B91250? currently simple verifier expects 1 position.
+INFO: Tracked ENTRY: YES 14.3 @ 0.07
+WARNING: Double Entry for KXBTC-26JAN1617-B91250? currently simple verifier expects 1 position.
+INFO: Tracked ENTRY: YES 14.3 @ 0.07
+WARNING: No completed round-trip trades found to verify. (Did execution occur?)
+WARNING: Entries found but no exits.
+INFO: PASS: Journal verification successful.

@@ -1,0 +1,2 @@
+=== Histogram for E_thin_book ===
+RESOLUTION_UNKNOWN	17

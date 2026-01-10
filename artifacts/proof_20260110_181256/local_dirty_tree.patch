@@ -1,0 +1,182 @@
+diff --git a/recorder/trade_journal.py b/recorder/trade_journal.py
+index fbef747..82fba8c 100644
+--- a/recorder/trade_journal.py
++++ b/recorder/trade_journal.py
+@@ -26,6 +26,10 @@ COLUMNS: List[str] = [
+     "edge_no",
+     "action",
+     "reason",
++    "thin_book_reason",
++    "thin_book_threshold_depth_usd",
++    "thin_book_threshold_qty",
++    "thin_book_spread_bps",
+     "params_hash",
+ ]
+ 
+diff --git a/risk/rules.py b/risk/rules.py
+index 411da58..4136397 100644
+--- a/risk/rules.py
++++ b/risk/rules.py
+@@ -27,6 +27,8 @@ class RiskRules:
+     model_horizon_sec: int = 300
+     model_warmup_samples: int = 5
+     shadow_min_days: int = 1
++    thin_book_threshold_depth_usd: float = 20.0
++    thin_book_threshold_qty: float = 5.0
+ 
+     @classmethod
+     def from_env(cls) -> "RiskRules":
+@@ -66,6 +68,12 @@ class RiskRules:
+                 "STALE_EDGE_MODEL_WARMUP_SAMPLES", cls.model_warmup_samples
+             ),
+             shadow_min_days=_get_int("STALE_EDGE_SHADOW_MIN_DAYS", cls.shadow_min_days),
++            thin_book_threshold_depth_usd=_get_float(
++                "STALE_EDGE_THIN_BOOK_THRESHOLD_DEPTH_USD", cls.thin_book_threshold_depth_usd
++            ),
++            thin_book_threshold_qty=_get_float(
++                "STALE_EDGE_THIN_BOOK_THRESHOLD_QTY", cls.thin_book_threshold_qty
++            ),
+         )
+ 
+     def edge_min(self) -> float:
+diff --git a/scripts/run_shadow_stale_edge.py b/scripts/run_shadow_stale_edge.py
+index 39f45d1..e45358f 100755
+--- a/scripts/run_shadow_stale_edge.py
++++ b/scripts/run_shadow_stale_edge.py
+@@ -42,6 +42,10 @@ def _simulate_polymarket_book(
+         yes_ask=yes_ask,
+         no_bid=no_bid,
+         no_ask=no_ask,
++        yes_bid_qty=1000.0,
++        yes_ask_qty=1000.0,
++        no_bid_qty=1000.0,
++        no_ask_qty=1000.0,
+         ts_ms=now_ms,
+     )
+ 
+@@ -267,6 +271,10 @@ def main() -> int:
+                 "edge_no": decision.edge_no or "",
+                 "action": decision.action,
+                 "reason": decision.reason,
++                "thin_book_reason": decision.thin_book_reason or "",
++                "thin_book_threshold_depth_usd": decision.thin_book_threshold_depth_usd or "",
++                "thin_book_threshold_qty": decision.thin_book_threshold_qty or "",
++                "thin_book_spread_bps": decision.thin_book_spread_bps or "",
+                 "params_hash": decision.params_hash,
+             }
+         )
+diff --git a/strategies/stale_edge.py b/strategies/stale_edge.py
+index a570767..d71a924 100644
+--- a/strategies/stale_edge.py
++++ b/strategies/stale_edge.py
+@@ -16,6 +16,10 @@ class BookTop:
+     yes_ask: Optional[float]
+     no_bid: Optional[float]
+     no_ask: Optional[float]
++    yes_bid_qty: Optional[float] = None
++    yes_ask_qty: Optional[float] = None
++    no_bid_qty: Optional[float] = None
++    no_ask_qty: Optional[float] = None
+     ts_ms: int
+ 
+ 
+@@ -32,6 +36,10 @@ class Decision:
+     edge_yes: Optional[float]
+     edge_no: Optional[float]
+     params_hash: str
++    thin_book_reason: Optional[str] = None
++    thin_book_threshold_depth_usd: Optional[float] = None
++    thin_book_threshold_qty: Optional[float] = None
++    thin_book_spread_bps: Optional[float] = None
+     cancel_all: bool = False
+ 
+ 
+@@ -113,6 +121,61 @@ class StaleEdgeStrategy:
+         if now_ts_ms - book.ts_ms > self.rules.book_stale_sec * 1000:
+             return self._no_trade("STALE_BOOK")
+ 
++        # Thin Book Checks
++        if all(
++            x is None for x in [book.yes_bid, book.yes_ask, book.no_bid, book.no_ask]
++        ):
++            return self._no_trade("THIN_BOOK", thin_book_reason="NO_BBO")
++
++        if (book.yes_bid is None or book.yes_ask is None) or (
++            book.no_bid is None or book.no_ask is None
++        ):
++            return self._no_trade("THIN_BOOK", thin_book_reason="ONE_SIDED")
++
++        # Check Depth
++        min_usd = self.rules.thin_book_threshold_depth_usd
++        min_qty = self.rules.thin_book_threshold_qty
++
++        # Verify all four sides meet depth
++        # Note: If prices are None, caught by ONE_SIDED above, so here they are not None.
++        # But qty might be None if caller didn't supply it. Assume 0 if None.
++        def _bad_depth(price: Optional[float], qty: Optional[float]) -> bool:
++            if price is None: return False # Should not happen here
++            q = qty if qty is not None else 0.0
++            if q < min_qty: return True
++            if price * q < min_usd: return True
++            return False
++
++        if (
++            _bad_depth(book.yes_bid, book.yes_bid_qty)
++            or _bad_depth(book.yes_ask, book.yes_ask_qty)
++            or _bad_depth(book.no_bid, book.no_bid_qty)
++            or _bad_depth(book.no_ask, book.no_ask_qty)
++        ):
++            return self._no_trade(
++                "THIN_BOOK",
++                thin_book_reason="DEPTH_BELOW_THRESHOLD",
++                thin_book_threshold_depth_usd=min_usd,
++                thin_book_threshold_qty=min_qty,
++            )
++
++        yes_spread = self._spread(book.yes_bid, book.yes_ask)
++        no_spread = self._spread(book.no_bid, book.no_ask)
++        max_spread = self.rules.spread_max
++        
++        # Calculate max spread encountered in bps
++        # If None, treat as infinite? But checked by ONE_SIDED.
++        curr_spread = max(yes_spread or 0.0, no_spread or 0.0)
++        
++        if (yes_spread is not None and yes_spread > max_spread) or (
++            no_spread is not None and no_spread > max_spread
++        ):
++            return self._no_trade(
++                "THIN_BOOK",
++                thin_book_reason="SPREAD_WIDE",
++                thin_book_spread_bps=curr_spread * 10000,
++            )
++
+         self.model.update(official_ts_ms, official_mid)
+         fair_up_prob = self.model.fair_up_prob()
+         if fair_up_prob is None:
+@@ -177,7 +240,14 @@ class StaleEdgeStrategy:
+             params_hash=params_hash,
+         )
+ 
+-    def _no_trade(self, reason: str) -> Decision:
++    def _no_trade(
++        self,
++        reason: str,
++        thin_book_reason: Optional[str] = None,
++        thin_book_threshold_depth_usd: Optional[float] = None,
++        thin_book_threshold_qty: Optional[float] = None,
++        thin_book_spread_bps: Optional[float] = None,
++    ) -> Decision:
+         return Decision(
+             action="NO_TRADE",
+             reason=reason,
+@@ -190,6 +260,10 @@ class StaleEdgeStrategy:
+             edge_yes=None,
+             edge_no=None,
+             params_hash="",
++            thin_book_reason=thin_book_reason,
++            thin_book_threshold_depth_usd=thin_book_threshold_depth_usd,
++            thin_book_threshold_qty=thin_book_threshold_qty,
++            thin_book_spread_bps=thin_book_spread_bps,
+         )
+ 
+     @staticmethod

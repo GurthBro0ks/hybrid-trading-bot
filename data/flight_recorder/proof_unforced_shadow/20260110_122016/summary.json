@@ -1,0 +1,20 @@
+{
+  "timestamp": "20260110_122016",
+  "targets": [
+    {
+      "ticker": "KXBTCMAX100-26-FEB",
+      "status": "DONE",
+      "verify": "PASS",
+      "stats": {
+        "entries": 0,
+        "exits": 0,
+        "no_trades": 251,
+        "reasons": {
+          "BOOK_SANITY": 1,
+          "MODEL_WARMUP": 250
+        }
+      }
+    }
+  ],
+  "overall_status": "PASS"
+}

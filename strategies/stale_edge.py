@@ -8,6 +8,7 @@ import hashlib
 from typing import Deque, Optional
 
 from risk.rules import RiskRules
+from strategies.reasons import ReasonCode
 
 
 @dataclass
@@ -88,7 +89,7 @@ class StaleEdgeStrategy:
         if now_ts_ms >= market_end_ts_ms:
             return Decision(
                 action="CANCEL_REPLACE",
-                reason="END_TIME_ANOMALY",
+                reason=ReasonCode.END_TIME_ANOMALY,
                 side=None,
                 price=None,
                 size=None,
@@ -102,26 +103,26 @@ class StaleEdgeStrategy:
             )
 
         if market_end_ts_ms - now_ts_ms < self.rules.time_to_end_cutoff_sec * 1000:
-            return self._no_trade("TIME_TO_END_CUTOFF")
+            return self._no_trade(ReasonCode.TIME_TO_END_CUTOFF)
 
         if official_mid is None or official_ts_ms is None:
-            return self._no_trade("OFFICIAL_FEED_MISSING")
+            return self._no_trade(ReasonCode.OFFICIAL_FEED_MISSING)
 
         if now_ts_ms - official_ts_ms > self.rules.official_stale_sec * 1000:
-            return self._no_trade("STALE_FEED")
+            return self._no_trade(ReasonCode.STALE_FEED)
 
         if now_ts_ms - book.ts_ms > self.rules.book_stale_sec * 1000:
-            return self._no_trade("STALE_BOOK")
+            return self._no_trade(ReasonCode.STALE_BOOK)
 
         self.model.update(official_ts_ms, official_mid)
         fair_up_prob = self.model.fair_up_prob()
         if fair_up_prob is None:
-            return self._no_trade("MODEL_WARMUP")
+            return self._no_trade(ReasonCode.MODEL_WARMUP)
 
         implied_yes = self._entry_implied(book.yes_bid, book.yes_ask)
         implied_no = self._entry_implied(book.no_bid, book.no_ask)
         if implied_yes is None or implied_no is None:
-            return self._no_trade("BOOK_INCOMPLETE")
+            return self._no_trade(ReasonCode.BOOK_INCOMPLETE)
 
         edge_yes = fair_up_prob - implied_yes
         edge_no = (1.0 - fair_up_prob) - implied_no
@@ -149,7 +150,7 @@ class StaleEdgeStrategy:
         if chosen_side is None or price is None or edge is None or not spread_ok:
             return Decision(
                 action="NO_TRADE",
-                reason="EDGE_TOO_SMALL",
+                reason=ReasonCode.EDGE_TOO_SMALL,
                 side=None,
                 price=None,
                 size=None,
@@ -165,7 +166,7 @@ class StaleEdgeStrategy:
         params_hash = _params_hash(market_id, chosen_side, price, size)
         return Decision(
             action="PLACE_ORDER",
-            reason="EDGE_OK",
+            reason=ReasonCode.EDGE_OK,
             side=chosen_side,
             price=price,
             size=size,

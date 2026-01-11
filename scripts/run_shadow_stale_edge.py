@@ -18,6 +18,9 @@ from risk.rules import ExposureTracker, RateLimiter, RiskRules
 from sources.resolution_source import is_unknown, resolution_source_from_metadata
 from strategies.reasons import ReasonCode
 from strategies.stale_edge import BookTop, Decision, StaleEdgeStrategy
+from venues.polymarket_fetch import fetch_book, PolymarketFetchError
+from venues.polymarket import parse_polymarket_book
+from shared.venue_book import VenueBook
 
 
 logger = logging.getLogger("stale_edge_shadow")
@@ -114,6 +117,8 @@ def main() -> int:
     parser.add_argument("--minutes", type=int, default=1)
     parser.add_argument("--mode", choices=["live", "sim"], default="live")
     parser.add_argument("--loop-interval-sec", type=float, default=1.0)
+    parser.add_argument("--venue", choices=["polymarket"], default=None)
+    parser.add_argument("--market", dest="market_id_cli", default=None)
     parser.add_argument("--market-id", default="pm-demo-market")
     parser.add_argument(
         "--rules-text",
@@ -128,6 +133,8 @@ def main() -> int:
         default="data/flight_recorder/stale_edge_decisions.csv",
     )
     args = parser.parse_args()
+
+    market_id = args.market_id_cli or args.market_id
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -186,7 +193,14 @@ def main() -> int:
 
         fair_hint = strategy.model.fair_up_prob() or 0.5
         mock_used = False
+        book = None
+        book_source = "NONE"
+        book_latency_ms = None
+        book_http_status = None
+        book_missing_reason = None
+
         if args.mode == "sim":
+            book_source = "mock"
             book = _simulate_polymarket_book(
                 fair_prob=fair_hint,
                 now_ms=now_ms,
@@ -195,11 +209,43 @@ def main() -> int:
             )
             mock_used = True
         else:
-            # LIVE MODE: prohibit mocks. 
-            # In a real system, we'd fetch from venue API. 
-            # For this exercise, we fail closed if no real data source is provided.
-            book = None
-            mock_used = False
+            # LIVE MODE: prohibit mocks.
+            if args.venue == "polymarket":
+                book_source = "polymarket"
+                t0 = time.time()
+                try:
+                    raw_book = fetch_book(market_id)
+                    book_latency_ms = int((time.time() - t0) * 1000)
+                    book_http_status = 200
+                    
+                    # Normalize
+                    vbook = parse_polymarket_book(raw_book)
+                    # Convert VenueBook to legacy BookTop for strategy compatibility
+                    book = BookTop(
+                        yes_bid=vbook.best_bid(),
+                        yes_ask=vbook.best_ask(),
+                        no_bid=None, # Polymarket CLOB is one-sided (YES/NO binary but we use one token)
+                        no_ask=None,
+                        ts_ms=now_ms
+                    )
+                    # Fix for BookTop: it needs no_bid/no_ask to not crash strategy
+                    # If it's a binary market, we can derive them if we know which side the token is.
+                    # Assuming market_id is the token for YES.
+                    if book.yes_bid is not None:
+                         book.no_ask = 1.0 - book.yes_bid
+                    if book.yes_ask is not None:
+                         book.no_bid = 1.0 - book.yes_ask
+
+                except PolymarketFetchError as e:
+                    book_missing_reason = e.reason
+                    book_http_status = e.status_code
+                    logger.error(f"BOOK_FETCH_FAILED: {e.reason}")
+                except Exception as e:
+                    book_missing_reason = "PARSE_ERROR"
+                    logger.error(f"BOOK_PARSE_FAILED: {str(e)}")
+            else:
+                book_missing_reason = "NO_CONFIG"
+                mock_used = False
 
         if is_unknown(source):
             decision = Decision(
@@ -245,7 +291,7 @@ def main() -> int:
             )
         else:
             decision = strategy.evaluate(
-                market_id=args.market_id,
+                market_id=market_id,
                 official_mid=official_mid,
                 official_ts_ms=official_ts_ms,
                 book=book,
@@ -254,10 +300,10 @@ def main() -> int:
             )
 
         decision = _apply_rate_limits(decision, now_ms, order_limiter, cancel_limiter)
-        decision = _apply_exposure_cap(decision, args.market_id, exposure, rules)
+        decision = _apply_exposure_cap(decision, market_id, exposure, rules)
 
         if decision.cancel_all:
-            exposure.reset_market(args.market_id)
+            exposure.reset_market(market_id)
 
         total_decisions += 1
         if decision.action == "PLACE_ORDER":
@@ -276,12 +322,16 @@ def main() -> int:
         journal.record_decision(
             {
                 "ts": now_ms,
-                "market_id": args.market_id,
+                "market_id": market_id,
                 "now": now_ms,
                 "market_end_ts": market_end_ts_ms,
                 "official_mid": official_mid or "",
                 "official_source": source_name,
                 "official_age_ms": official_age_ms,
+                "book_source": book_source,
+                "book_latency_ms": book_latency_ms or "",
+                "book_http_status": book_http_status or "",
+                "book_missing_reason": book_missing_reason or "",
                 "pm_yes_bid": book.yes_bid if book else "",
                 "pm_yes_ask": book.yes_ask if book else "",
                 "pm_no_bid": book.no_bid if book else "",

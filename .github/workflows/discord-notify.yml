@@ -49,12 +49,12 @@ jobs:
           RUN_URL="https://github.com/${REPO_FULL}/actions/runs/${GITHUB_RUN_ID}"
           SUBJECT="$(git log -1 --pretty=%s 2>/dev/null || echo 'commit')"
 
-          # Quick summary (repo + branch + subject + who + link)
           CONTENT="[$REPO] ${GITHUB_EVENT_NAME} ${BRANCH}: ${SHA_SHORT} — ${SUBJECT} (by ${ACTOR})"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -n "${REASON:-}" ]; then
             CONTENT="${CONTENT} — reason: ${REASON}"
           fi
           CONTENT="${CONTENT}\n${RUN_URL}"
+          export CONTENT
 
           # Build JSON via python so newlines/quotes are escaped correctly; no mentions allowed
           python3 - <<'PY' > /tmp/discord_payload.json
@@ -75,7 +75,3 @@ PY
             "$DISCORD_WEBHOOK_URL" >/dev/null
 
           echo "Discord notify: posted."
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_HYBRID_TRADING_BOT_REPO }}
-          REASON: ${{ inputs.reason }}
-          CONTENT: ""

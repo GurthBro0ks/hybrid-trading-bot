@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Hybrid Shadow Runner periodically
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+Persistent=true
+Unit=hybrid-shadow-runner.service
+
+[Install]
+WantedBy=timers.target

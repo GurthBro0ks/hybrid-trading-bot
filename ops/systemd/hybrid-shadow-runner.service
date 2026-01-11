@@ -1,0 +1,29 @@
+[Unit]
+Description=Hybrid Trading Bot - Shadow Runner (Artifacts Emitter)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=slimy
+Group=slimy
+WorkingDirectory=/opt/pm_updown_bot_bundle
+
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/pm_updown_bot_bundle
+Environment=SHADOW_ARTIFACTS_DIR=/opt/hybrid-trading-bot/artifacts/shadow
+Environment=SHADOW_JOURNAL_MAX_ROWS=500
+Environment=SHADOW_RUN_TICKER=KALSHI-TEST-DEEP
+
+RuntimeDirectory=hybrid-shadow-runner
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/flock -n /run/hybrid-shadow-runner/lock -c '/usr/bin/python3 /opt/pm_updown_bot_bundle/scripts/run_shadow_prod_entrypoint.py'
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/hybrid-trading-bot/artifacts/shadow /run/hybrid-shadow-runner
+UMask=0022
+
+TimeoutStartSec=120

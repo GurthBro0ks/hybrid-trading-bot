@@ -49,49 +49,12 @@ jobs:
           SUBJECT="$(git log -1 --pretty=%s 2>/dev/null || echo 'commit')"
 
           # Count commits in a push event (best effort). For workflow_dispatch, treat as 1.
-          COMMIT_COUNT="$(python3 - <<'PY'
-import json, os
-p=os.environ.get("GITHUB_EVENT_PATH","")
-try:
-  ev=json.load(open(p))
-except Exception:
-  ev={}
-if os.environ.get("GITHUB_EVENT_NAME")=="push":
-  commits=ev.get("commits") or []
-  print(len(commits))
-else:
-  print(1)
-PY
-          )"
+          COMMIT_COUNT="$(python3 -c 'import json,os; p=os.environ.get("GITHUB_EVENT_PATH",""); ev=json.load(open(p)) if p and os.path.exists(p) else {}; count=len(ev.get("commits") or []) if os.environ.get("GITHUB_EVENT_NAME")=="push" else 1; print(count)')"
 
           export REPO BRANCH SHA_SHORT ACTOR SUBJECT COMMIT_COUNT REASON
 
           # Build Discord message: bold header + code block (no URLs)
-          python3 - <<'PY' > /tmp/discord_payload.json
-import json, os
-repo=os.environ.get("REPO","repo")
-branch=os.environ.get("BRANCH","")
-sha=os.environ.get("SHA_SHORT","")
-actor=os.environ.get("ACTOR","")
-subject=os.environ.get("SUBJECT","commit")
-count=os.environ.get("COMMIT_COUNT","1")
-event=os.environ.get("GITHUB_EVENT_NAME","")
-reason=os.environ.get("REASON","").strip()
-
-header=f"[{repo}] {event} {branch}: {sha} (by {actor})"
-lines=[subject, f"commits: {count}"]
-if event=="workflow_dispatch" and reason:
-  lines.append(f"reason: {reason}")
-
-content="**"+header+"**\n```text\n" + "\n".join(lines) + "\n```"
-
-payload={
-  "username": f"CI - {repo}",
-  "content": content,
-  "allowed_mentions": {"parse": []},
-}
-print(json.dumps(payload))
-PY
+          python3 -c 'import json,os; repo=os.environ.get("REPO","repo"); branch=os.environ.get("BRANCH",""); sha=os.environ.get("SHA_SHORT","" ); actor=os.environ.get("ACTOR",""); subject=os.environ.get("SUBJECT","commit"); count=os.environ.get("COMMIT_COUNT","1"); event=os.environ.get("GITHUB_EVENT_NAME",""); reason=os.environ.get("REASON","").strip(); header=f"[{repo}] {event} {branch}: {sha} (by {actor})"; lines=[subject, f"commits: {count}"] + ([f"reason: {reason}"] if event=="workflow_dispatch" and reason else []); content="**"+header+"**\\n```text\\n" + "\\n".join(lines) + "\\n```"; payload={"username": f"CI - {repo}", "content": content, "allowed_mentions": {"parse": []}}; print(json.dumps(payload))' > /tmp/discord_payload.json
 
           curl -sS -X POST \
             -H 'Content-Type: application/json' \

@@ -18,9 +18,8 @@ from risk.rules import ExposureTracker, RateLimiter, RiskRules
 from sources.resolution_source import is_unknown, resolution_source_from_metadata
 from strategies.reasons import ReasonCode
 from strategies.stale_edge import BookTop, Decision, StaleEdgeStrategy
-from venues.polymarket_fetch import fetch_book, PolymarketFetchError
-from venues.polymarket import parse_polymarket_book
-from shared.venue_book import VenueBook
+from venuebook.types import BookStatus
+from venues.polymarket import fetch_polymarket_venuebook
 
 
 logger = logging.getLogger("stale_edge_shadow")
@@ -214,32 +213,32 @@ def main() -> int:
                 book_source = "polymarket"
                 t0 = time.time()
                 try:
-                    raw_book = fetch_book(market_id)
+                    vbook = fetch_polymarket_venuebook(market_id)
                     book_latency_ms = int((time.time() - t0) * 1000)
-                    book_http_status = 200
-                    
-                    # Normalize
-                    vbook = parse_polymarket_book(raw_book)
-                    # Convert VenueBook to legacy BookTop for strategy compatibility
-                    book = BookTop(
-                        yes_bid=vbook.best_bid(),
-                        yes_ask=vbook.best_ask(),
-                        no_bid=None, # Polymarket CLOB is one-sided (YES/NO binary but we use one token)
-                        no_ask=None,
-                        ts_ms=now_ms
-                    )
-                    # Fix for BookTop: it needs no_bid/no_ask to not crash strategy
-                    # If it's a binary market, we can derive them if we know which side the token is.
-                    # Assuming market_id is the token for YES.
-                    if book.yes_bid is not None:
-                         book.no_ask = 1.0 - book.yes_bid
-                    if book.yes_ask is not None:
-                         book.no_bid = 1.0 - book.yes_ask
+                    book_http_status = 200 if vbook.status == BookStatus.OK else None
 
-                except PolymarketFetchError as e:
-                    book_missing_reason = e.reason
-                    book_http_status = e.status_code
-                    logger.error(f"BOOK_FETCH_FAILED: {e.reason}")
+                    if vbook.status == BookStatus.OK:
+                        # Convert VenueBook to legacy BookTop for strategy compatibility
+                        book = BookTop(
+                            yes_bid=vbook.best_bid,
+                            yes_ask=vbook.best_ask,
+                            no_bid=None,  # Polymarket CLOB is one-sided (YES token)
+                            no_ask=None,
+                            ts_ms=now_ms,
+                        )
+                        # Fix for BookTop: it needs no_bid/no_ask to not crash strategy
+                        # If it's a binary market, we can derive them if we know which side the token is.
+                        # Assuming market_id is the token for YES.
+                        if book.yes_bid is not None:
+                            book.no_ask = 1.0 - book.yes_bid
+                        if book.yes_ask is not None:
+                            book.no_bid = 1.0 - book.yes_ask
+                    else:
+                        book_missing_reason = (
+                            vbook.fail_reason.name if vbook.fail_reason is not None else "UNKNOWN"
+                        )
+                        logger.error(f"BOOK_FETCH_FAILED: {book_missing_reason}")
+
                 except Exception as e:
                     book_missing_reason = "PARSE_ERROR"
                     logger.error(f"BOOK_PARSE_FAILED: {str(e)}")

@@ -1,0 +1,6 @@
+{
+  "market": "pm-no-bbo",
+  "bids": [
+    {"price": "0.45", "size": "10"}
+  ]
+}

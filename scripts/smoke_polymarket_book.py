@@ -1,51 +1,37 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from venues.polymarket_fetch import fetch_book, PolymarketFetchError
-from venues.polymarket import parse_polymarket_book
-from shared.venue_book import VenueBook
+from venues.polymarket import fetch_polymarket_venuebook
 
-def main():
-    parser = argparse.ArgumentParser()
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Fetch Polymarket book and emit VenueBook JSON.")
     parser.add_argument("--market", required=True, help="Polymarket token_id")
+    parser.add_argument("--out", required=True, help="Output JSON path")
     args = parser.parse_args()
 
-    print(f"--- Polymarket Smoke Test: {args.market} ---")
-    
-    t0 = time.time()
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
     try:
-        raw = fetch_book(args.market)
-        latency_ms = int((time.time() - t0) * 1000)
-        
-        vbook = parse_polymarket_book(raw)
-        
-        bb = vbook.best_bid()
-        ba = vbook.best_ask()
-        spread = vbook.spread()
-        spread_bps = (spread / bb * 10000) if bb and spread is not None else 0
-        depth = vbook.total_depth()
-        
-        print(f"Status:   OK")
-        print(f"Latency:  {latency_ms}ms")
-        print(f"Best Bid: {bb}")
-        print(f"Best Ask: {ba}")
-        print(f"Spread:   {spread:.6f} ({spread_bps:.1f} bps)")
-        print(f"Depth:    {depth:.2f}")
-        
-    except PolymarketFetchError as e:
-        print(f"Status:   FAILED (FetchError)")
-        print(f"Reason:   {e.reason}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Status:   FAILED (Unexpected)")
-        print(f"Error:    {str(e)}")
-        sys.exit(1)
+        vbook = fetch_polymarket_venuebook(args.market)
+    except Exception as exc:
+        print(f"Status: FAILED (Unexpected) {exc}", file=sys.stderr)
+        return 1
+
+    payload = vbook.to_json_dict()
+    with out_path.open("w") as f:
+        json.dump(payload, f, sort_keys=True)
+
+    print(f"Status: {payload.get('status')} out={out_path}")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

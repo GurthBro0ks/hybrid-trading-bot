@@ -1,3 +1,4 @@
+import importlib.util
 import json
 from pathlib import Path
 
@@ -82,3 +83,27 @@ def test_polymarket_fetch_failure_maps_to_book_unavailable(monkeypatch: pytest.M
 
     assert book.status == BookStatus.NO_TRADE
     assert book.fail_reason == BookFailReason.BOOK_UNAVAILABLE
+
+
+def test_polymarket_invalid_env_depth_qty_min_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    module_path = Path(__file__).resolve().parents[1] / "venues" / "polymarket.py"
+    monkeypatch.setenv("PM_DEPTH_QTY_MIN", "not-a-number")
+    monkeypatch.setenv("PM_SPREAD_MAX", "0.05")
+
+    spec = importlib.util.spec_from_file_location("polymarket_env_invalid_depth", module_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    with pytest.raises(ValueError, match="PM_DEPTH_QTY_MIN"):
+        spec.loader.exec_module(module)
+
+
+def test_polymarket_invalid_env_spread_max_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    module_path = Path(__file__).resolve().parents[1] / "venues" / "polymarket.py"
+    monkeypatch.setenv("PM_DEPTH_QTY_MIN", "100")
+    monkeypatch.setenv("PM_SPREAD_MAX", "-0.1")
+
+    spec = importlib.util.spec_from_file_location("polymarket_env_invalid_spread", module_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    with pytest.raises(ValueError, match="PM_SPREAD_MAX"):
+        spec.loader.exec_module(module)

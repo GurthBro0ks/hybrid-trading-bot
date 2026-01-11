@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from venuebook.types import BookFailReason, BookStatus
 from venues.polymarket import fetch_polymarket_venuebook
 
 
@@ -26,10 +27,33 @@ def main() -> int:
         return 1
 
     payload = vbook.to_json_dict()
+    status = payload.get("status")
+    reason = payload.get("fail_reason")
+    valid_status = {item.name for item in BookStatus}
+    valid_reasons = {item.name for item in BookFailReason}
+
+    if status not in valid_status:
+        print(f"Invalid status value: {status}", file=sys.stderr)
+        return 2
+    if status == "OK":
+        if reason is not None:
+            print("Invalid fail_reason for OK status", file=sys.stderr)
+            return 2
+        if payload.get("best_bid") is None or payload.get("best_ask") is None:
+            print("Missing best_bid/best_ask for OK status", file=sys.stderr)
+            return 2
+    else:
+        if reason not in valid_reasons:
+            print(f"Invalid fail_reason for NO_TRADE: {reason}", file=sys.stderr)
+            return 2
+        if payload.get("best_bid") is not None or payload.get("best_ask") is not None:
+            print("Unexpected prices for NO_TRADE status", file=sys.stderr)
+            return 2
+
     with out_path.open("w") as f:
         json.dump(payload, f, sort_keys=True)
 
-    print(f"Status: {payload.get('status')} out={out_path}")
+    print(f"Status: {status} reason={reason} out={out_path}")
     return 0
 
 

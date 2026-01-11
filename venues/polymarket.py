@@ -1,4 +1,5 @@
 import math
+import os
 import time
 from typing import List, Optional, Tuple
 
@@ -6,8 +7,21 @@ from venuebook.types import BookFailReason, BookStatus, VenueBook
 from venues.polymarket_fetch import PolymarketFetchError, fetch_book
 
 
-DEPTH_QTY_MIN = 100.0
-SPREAD_MAX = 0.05
+def _env_nonnegative_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} must be a non-negative float")
+    if not math.isfinite(value) or value < 0.0:
+        raise ValueError(f"{name} must be a non-negative float")
+    return value
+
+
+DEPTH_QTY_MIN = _env_nonnegative_float("PM_DEPTH_QTY_MIN", 100.0)
+SPREAD_MAX = _env_nonnegative_float("PM_SPREAD_MAX", 0.05)
 
 
 def _fail_book(

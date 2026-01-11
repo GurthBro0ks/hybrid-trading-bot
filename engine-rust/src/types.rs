@@ -50,6 +50,11 @@ pub enum ReasonCode {
 
     // Shadow-specific
     ShadowRecorded, // S9: shadow order logged
+
+    // Thin-book subreasons (VenueBook risk management)
+    ThinBookNoBbo,               // NO_BBO: Missing best bid or ask
+    ThinBookDepthBelowThreshold, // DEPTH_BELOW_THRESHOLD: Insufficient liquidity
+    ThinBookSpreadWide,          // SPREAD_WIDE: Spread exceeds threshold
 }
 
 impl std::fmt::Display for ReasonCode {
@@ -67,6 +72,9 @@ impl std::fmt::Display for ReasonCode {
             ReasonCode::Canceled => write!(f, "CANCELED"),
             ReasonCode::Rejected => write!(f, "REJECTED"),
             ReasonCode::ShadowRecorded => write!(f, "SHADOW_RECORDED"),
+            ReasonCode::ThinBookNoBbo => write!(f, "THIN_BOOK_NO_BBO"),
+            ReasonCode::ThinBookDepthBelowThreshold => write!(f, "THIN_BOOK_DEPTH_BELOW_THRESHOLD"),
+            ReasonCode::ThinBookSpreadWide => write!(f, "THIN_BOOK_SPREAD_WIDE"),
         }
     }
 }
@@ -202,6 +210,55 @@ pub fn now_ts_millis() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("Time went backwards")
         .as_millis() as i64
+}
+
+/// Price level in orderbook (price, quantity)
+pub type Level = (f64, f64);
+
+/// Canonical venue orderbook representation
+///
+/// Normalized from venue-specific formats (Polymarket, Kalshi, etc.)
+/// Used for liquidity analysis and thin-book classification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VenueBook {
+    /// Venue identifier (e.g., "polymarket", "kalshi")
+    pub venue: String,
+    /// Market/ticker symbol
+    pub symbol: String,
+    /// Bids sorted descending by price (best bid first)
+    pub bids: Vec<Level>,
+    /// Asks sorted ascending by price (best ask first)
+    pub asks: Vec<Level>,
+}
+
+impl VenueBook {
+    /// Get best bid price (highest buy price)
+    pub fn best_bid(&self) -> Option<f64> {
+        self.bids.first().map(|(price, _)| *price)
+    }
+
+    /// Get best ask price (lowest sell price)
+    pub fn best_ask(&self) -> Option<f64> {
+        self.asks.first().map(|(price, _)| *price)
+    }
+
+    /// Get spread (ask - bid)
+    pub fn spread(&self) -> Option<f64> {
+        match (self.best_ask(), self.best_bid()) {
+            (Some(ask), Some(bid)) => Some(ask - bid),
+            _ => None,
+        }
+    }
+
+    /// Get total quantity in top N bid levels
+    pub fn bid_depth(&self, levels: usize) -> f64 {
+        self.bids.iter().take(levels).map(|(_, qty)| qty).sum()
+    }
+
+    /// Get total quantity in top N ask levels
+    pub fn ask_depth(&self, levels: usize) -> f64 {
+        self.asks.iter().take(levels).map(|(_, qty)| qty).sum()
+    }
 }
 
 #[cfg(test)]

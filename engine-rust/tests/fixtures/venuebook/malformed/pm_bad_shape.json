@@ -1,0 +1,5 @@
+{
+  "market": "pm-test-malformed",
+  "bids": "not-an-array",
+  "asks": 123
+}

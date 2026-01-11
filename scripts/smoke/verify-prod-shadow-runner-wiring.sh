@@ -4,7 +4,7 @@ set -euo pipefail
 SERVICE="hybrid-shadow-runner.service"
 TIMER="hybrid-shadow-runner.timer"
 ENTRYPOINT="/opt/pm_updown_bot_bundle/scripts/run_shadow_prod_entrypoint.py"
-ART_DIR="/opt/hybrid-trading-bot/artifacts/shadow"
+ART_DIR="${SHADOW_ARTIFACTS_DIR:-/opt/pm_updown_bot_bundle/artifacts/shadow}"
 
 systemctl cat "$SERVICE" | rg -n "$ENTRYPOINT" >/dev/null
 printf 'OK_SERVICE_ENTRYPOINT\n'

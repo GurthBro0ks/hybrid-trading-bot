@@ -1,4 +1,7 @@
-"""Minimal Kalshi venue stub for shadow runner."""
+"""STUB_ONLY: Compatibility shim for SHADOW runner import graph.
+
+Must remain read-only and must not place orders or make authenticated network calls.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +11,15 @@ from typing import Any, Dict, List, Optional, Tuple
 class KalshiVenue:
     def __init__(self, env: str = "prod") -> None:
         self.env = env
+
+    def place_order(self, *args, **kwargs):
+        raise RuntimeError("STUB_ONLY_NO_TRADING")
+
+    def cancel_order(self, *args, **kwargs):
+        raise RuntimeError("STUB_ONLY_NO_TRADING")
+
+    def cancel_all(self, *args, **kwargs):
+        raise RuntimeError("STUB_ONLY_NO_TRADING")
 
     def get_orderbook(self, ticker: str, depth: int = 10) -> Dict[str, Any]:
         return {"yes": [], "no": []}

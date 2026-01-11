@@ -7,6 +7,9 @@
 /**/.venv/
 __pycache__/
 *.pyc
+**/__pycache__/
+artifacts/shadow/
+artifacts/**/flight_recorder*.csv
 
 # Data / DB
 /data/*.db

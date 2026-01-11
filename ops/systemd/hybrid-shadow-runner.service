@@ -11,9 +11,10 @@ WorkingDirectory=/opt/pm_updown_bot_bundle
 
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONPATH=/opt/pm_updown_bot_bundle
-Environment=SHADOW_ARTIFACTS_DIR=/opt/hybrid-trading-bot/artifacts/shadow
+Environment=SHADOW_ARTIFACTS_DIR=/opt/pm_updown_bot_bundle/artifacts/shadow
 Environment=SHADOW_JOURNAL_MAX_ROWS=500
-Environment=SHADOW_RUN_TICKER=KALSHI-TEST-DEEP
+Environment=SHADOW_ONCE=1
+EnvironmentFile=-/etc/default/hybrid-shadow-runner
 
 RuntimeDirectory=hybrid-shadow-runner
 RuntimeDirectoryMode=0755
@@ -23,7 +24,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/opt/hybrid-trading-bot/artifacts/shadow /run/hybrid-shadow-runner
+ReadWritePaths=/opt/pm_updown_bot_bundle/artifacts/shadow /opt/hybrid-trading-bot/artifacts/shadow /run/hybrid-shadow-runner
 UMask=0022
 
 TimeoutStartSec=120

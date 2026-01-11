@@ -1,0 +1,90 @@
+name: shadow-artifacts-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'recorder/**'
+      - 'scripts/smoke/**'
+      - 'tests/test_shadow_artifacts*.py'
+      - '.github/workflows/shadow-artifacts-ci.yml'
+  pull_request:
+    paths:
+      - 'recorder/**'
+      - 'scripts/smoke/**'
+      - 'tests/test_shadow_artifacts*.py'
+      - '.github/workflows/shadow-artifacts-ci.yml'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual run'
+        required: false
+        default: 'manual verification'
+
+jobs:
+  verify-artifacts:
+    name: Verify Shadow Artifacts Contract
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq ripgrep
+
+      - name: Install Python test dependencies
+        run: |
+          pip install pytest
+
+      - name: Run offline artifact verification
+        run: |
+          bash scripts/smoke/verify-shadow-artifacts-ci.sh
+
+      - name: Run artifact contract tests
+        run: |
+          pytest tests/test_shadow_artifacts_contract.py -v
+
+      - name: Run sanitization tests
+        run: |
+          pytest tests/test_shadow_artifacts_no_secrets.py -v
+
+  tripwire:
+    name: Tripwire Security Check
+    runs-on: ubuntu-latest
+    needs: verify-artifacts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Generate artifacts with malicious input
+        run: |
+          mkdir -p /tmp/tripwire/artifacts/shadow
+          export SHADOW_ARTIFACTS_DIR=/tmp/tripwire/artifacts/shadow
+          python3 scripts/smoke/gen_mock_shadow_artifacts.py
+
+      - name: Tripwire check - MUST NOT find secrets
+        run: |
+          if rg -n -i "api[_-]?key|secret|token|authorization|bearer|private[_-]?key|password" /tmp/tripwire/artifacts; then
+            echo "::error::FAIL_SECRETS_MATCHED - Secrets detected in artifacts!"
+            exit 1
+          fi
+          echo "OK_NO_SECRETS_MATCHED"

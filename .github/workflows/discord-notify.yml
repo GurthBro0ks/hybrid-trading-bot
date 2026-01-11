@@ -49,25 +49,25 @@ jobs:
           RUN_URL="https://github.com/${REPO_FULL}/actions/runs/${GITHUB_RUN_ID}"
           SUBJECT="$(git log -1 --pretty=%s 2>/dev/null || echo 'commit')"
 
-          CONTENT="[$REPO] ${GITHUB_EVENT_NAME} ${BRANCH}: ${SHA_SHORT} — ${SUBJECT} (by ${ACTOR})"
+          CONTENT="[$REPO] ${GITHUB_EVENT_NAME} ${BRANCH}: ${SHA_SHORT} - ${SUBJECT} (by ${ACTOR})"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -n "${REASON:-}" ]; then
-            CONTENT="${CONTENT} — reason: ${REASON}"
+            CONTENT="${CONTENT} - reason: ${REASON}"
           fi
           CONTENT="${CONTENT}\n${RUN_URL}"
           export CONTENT
 
           # Build JSON via python so newlines/quotes are escaped correctly; no mentions allowed
           python3 - <<'PY' > /tmp/discord_payload.json
-import json, os
-repo = os.environ.get("GITHUB_REPOSITORY","").split("/")[-1] or "repo"
-content = os.environ.get("CONTENT","")
-payload = {
-  "username": f"CI — {repo}",
-  "content": content,
-  "allowed_mentions": {"parse": []},
-}
-print(json.dumps(payload))
-PY
+          import json, os
+          repo = os.environ.get("GITHUB_REPOSITORY","").split("/")[-1] or "repo"
+          content = os.environ.get("CONTENT","")
+          payload = {
+            "username": f"CI - {repo}",
+            "content": content,
+            "allowed_mentions": {"parse": []},
+          }
+          print(json.dumps(payload))
+          PY
 
           curl -sS -X POST \
             -H 'Content-Type: application/json' \

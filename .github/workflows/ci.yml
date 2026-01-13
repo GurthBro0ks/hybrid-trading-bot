@@ -25,3 +25,5 @@ jobs:
           python3 scripts/smoke_kalshi_book.py --help >/dev/null
           python3 scripts/smoke_polymarket_book.py --help >/dev/null
           python3 scripts/smoke_venuebook_contract.py --out /tmp/venuebook_contract.json
+          jq -e '.ok | has("venue") and has("ts") and has("best_bid") and has("best_ask") and has("depth_qty_total") and has("status") and has("fail_reason")' /tmp/venuebook_contract.json >/dev/null
+          jq -e '.no_trade | has("status") and has("fail_reason") and has("best_bid") and has("best_ask")' /tmp/venuebook_contract.json >/dev/null

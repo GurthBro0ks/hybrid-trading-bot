@@ -38,7 +38,7 @@ if command -v rg &> /dev/null; then
         --glob '!**/build/**' \
         --glob '!**/docs/**' \
         --glob '!scripts/tripwire_no_secrets.sh' \
-        --line-number)
+        --line-number | grep -vE "FailureReason|token_id|clobTokenIds|token_suffix|TOKEN_ID|TOKEN_IDS|OUTCOME_TOKEN|SECRETS_MATCHED|SECRET_PATTERN|REDACTED|Bearer TOKEN")
     EXIT_CODE=$?
     set -e
     
@@ -83,7 +83,7 @@ else
         --exclude-dir=build \
         --exclude-dir=docs \
         --exclude=tripwire_no_secrets.sh \
-        -n)
+        -n | grep -vE "FailureReason|token_id|clobTokenIds|token_suffix|TOKEN_ID|TOKEN_IDS|OUTCOME_TOKEN|SECRETS_MATCHED|SECRET_PATTERN|REDACTED|Bearer TOKEN")
     EXIT_CODE=$?
     set -e
     

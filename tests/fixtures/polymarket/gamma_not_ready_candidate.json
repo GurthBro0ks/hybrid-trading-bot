@@ -1,0 +1,15 @@
+{
+    "question": "Will Ethereum reach $10k in 2026?",
+    "condition": "This market resolves to Yes if Ethereum reaches $10,000 at any point in 2026.",
+    "slug": "ethereum-10k-2026",
+    "resolutionSource": "https://www.coingecko.com",
+    "endDateIso": "2026-12-31T23:59:59Z",
+    "enableOrderBook": false,
+    "acceptingOrders": false,
+    "closed": false,
+    "restricted": false,
+    "liquidityNum": 100,
+    "volume24hr": 10,
+    "clobTokenIds": "[\"3333\", \"4444\"]",
+    "outcomes": "[\"Yes\", \"No\"]"
+}

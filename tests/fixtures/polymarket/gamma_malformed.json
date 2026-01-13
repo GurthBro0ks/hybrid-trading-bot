@@ -1,0 +1,5 @@
+{
+    "question": "Malformed Market",
+    "clobTokenIds": "this is not json",
+    "outcomes": "[\"Yes\", \"No\""
+}

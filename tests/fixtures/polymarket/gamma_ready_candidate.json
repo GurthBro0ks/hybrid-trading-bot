@@ -1,0 +1,16 @@
+{
+    "id": "bitcoin-100k-2026",
+    "question": "Will Bitcoin reach $100k in 2026?",
+    "condition": "This market resolves to Yes if Bitcoin reaches $100,000 at any point in 2026.",
+    "slug": "bitcoin-100k-2026",
+    "resolutionSource": "https://www.coingecko.com",
+    "endDateIso": "2026-12-31T23:59:59Z",
+    "enableOrderBook": true,
+    "acceptingOrders": true,
+    "closed": false,
+    "restricted": false,
+    "liquidityNum": 1000000,
+    "volume24hr": 50000,
+    "clobTokenIds": "[\"1111\", \"2222\"]",
+    "outcomes": "[\"Yes\", \"No\"]"
+}

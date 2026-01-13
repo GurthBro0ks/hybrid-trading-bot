@@ -1,0 +1,6 @@
+{
+  "ticker": "KXBTC-25DEC31",
+  "close_time": "2030-12-31T23:59:59Z",
+  "rules_primary": "Resolved by the Coinbase BTC/USD spot price.",
+  "rules_secondary": "Backup: Gemini"
+}

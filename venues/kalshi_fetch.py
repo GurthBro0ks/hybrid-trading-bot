@@ -74,3 +74,34 @@ def fetch_book(
             raise KalshiFetchError(f"UNEXPECTED_ERROR: {exc}")
 
     raise KalshiFetchError("MAX_RETRIES_EXCEEDED")
+
+
+def fetch_market(
+    market_ticker: str,
+    *,
+    token: Optional[str] = None,
+    timeout_s: float = 5.0,
+    base_url: Optional[str] = None,
+) -> dict:
+    url_base = base_url or _base_url()
+    # Kalshi V2 Market endpoint using ticker
+    url = f"{url_base}/trade-api/v2/markets/{market_ticker}"
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=timeout_s)
+        if resp.status_code == 200:
+            try:
+                data = resp.json()
+                # The endpoint returns {"market": {...}}
+                return data.get("market", data)
+            except ValueError:
+                raise KalshiFetchError("JSON_PARSE_ERROR", status_code=200)
+    except requests.exceptions.RequestException as e:
+        raise KalshiFetchError(f"NETWORK_ERROR: {e}")
+
+    if resp.status_code == 404:
+        raise KalshiFetchError("MARKET_NOT_FOUND", status_code=404)
+    raise KalshiFetchError(f"HTTP_{resp.status_code}", status_code=resp.status_code)

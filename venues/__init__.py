@@ -3,6 +3,6 @@
 Must remain read-only and must not place orders or make authenticated network calls.
 """
 
-from .kalshi import KalshiVenue
+
 
 __all__ = ["KalshiVenue"]

@@ -32,26 +32,27 @@ Gamma active markets do not always have an initialized CLOB orderbook. Probing `
 Output:
 
 ```
-130 passed in 0.80s
+134 passed in 0.99s
 ```
 
 ### 2. Verification Script (Fixture Mode)
 
 ```bash
-python3 scripts/verify_shadow_pipeline.py --fixture-mode
+python3 scripts/verify_shadow_pipeline.py --fixture-mode --known-ready-market 0x123 --known-ready-token 0x456
 ```
 
 Output:
 
 ```
-19:03:13 [INFO] Starting discovery...
-19:03:13 [INFO] CLOB_PROBE | token: ...1111 | code: 200 | status: READY | reason: OK
-19:03:13 [INFO] Discovered: 1 READY, 0 NOT_READY
-19:03:13 [INFO] Selected first READY candidate from discovery.
-19:03:13 [INFO] Final Selected: bitcoin-100k-2026 (Token: 1111)
-19:03:13 [INFO] Fetching VenueBook...
-19:03:13 [INFO] VenueBook Status: BookStatus.OK
-RESULT=PASS selected_market_id=bitcoin-100k-2026 selected_token_id=1111 probes=1 venuebook=OK ready_count=1
+20:10:13 [INFO] FIXTURE MODE ENABLED
+20:10:13 [INFO] Starting discovery...
+20:10:13 [INFO] Discovered: 1 READY, 0 NOT_READY
+20:10:13 [INFO] Probing known-ready candidate: 0x123 (Token: 0x456)
+20:10:13 [INFO] Known-ready candidate is READY. Selected.
+20:10:13 [INFO] Final Selected: 0x123 (Token: 0x456)
+20:10:13 [INFO] Fetching VenueBook...
+20:10:13 [INFO] VenueBook Status: BookStatus.OK
+RESULT=PASS selected_market_id=0x123 selected_token_id=0x456 venuebook=OK ready_count=1
 ```
 
 ### 3. Tripwire Scan

@@ -16,8 +16,8 @@ class TestSelectionPipeline(unittest.TestCase):
         with open(path, 'r') as f:
             return json.load(f)
 
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
-    @patch('venues.polymarket_discovery.probe_clob_readiness')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.probe_clob_readiness')
     def test_selection_success(self, mock_probe, mock_discover):
         # 1. Mock Gamma discovery to return one ready and one not ready candidate
         ready_market = self._load_fixture("gamma_ready_candidate.json")
@@ -40,7 +40,7 @@ class TestSelectionPipeline(unittest.TestCase):
         # should have skipped 1 (not eligible) and probed 1
         self.assertEqual(result.probes_attempted, 1)
 
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
     def test_selection_no_eligible_markets(self, mock_discover):
         not_ready_market = self._load_fixture("gamma_not_ready_candidate.json")
         mock_discover.return_value = [not_ready_market]

@@ -55,9 +55,9 @@ class TestDiscoveryPipeline(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, FailureReason.EXPIRING_SOON)
         
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
-    @patch('venues.polymarket_discovery.parse_gamma_yes_no_tokens')
-    @patch('venues.polymarket_discovery.probe_clob_readiness')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.parse_gamma_yes_no_tokens')
+    @patch('polymarket.clob_readiness.probe_clob_readiness')
     def test_selection_pipeline_success(self, mock_probe, mock_parse, mock_discover):
         # Setup mocks
         mock_discover.return_value = [MOCK_GOOD_MARKET]
@@ -72,9 +72,9 @@ class TestDiscoveryPipeline(unittest.TestCase):
         self.assertEqual(result.selected_token_id, "yes_123")
         self.assertEqual(result.probes_attempted, 1)
 
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
-    @patch('venues.polymarket_discovery.parse_gamma_yes_no_tokens')
-    @patch('venues.polymarket_discovery.probe_clob_readiness')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.parse_gamma_yes_no_tokens')
+    @patch('polymarket.clob_readiness.probe_clob_readiness')
     def test_pipeline_fail_parse_then_success(self, mock_probe, mock_parse, mock_discover):
         # Market 1: Parse Fail
         m1 = MOCK_GOOD_MARKET.copy()
@@ -104,9 +104,9 @@ class TestDiscoveryPipeline(unittest.TestCase):
         # If parse fails, it still increments probes_attempted.
         self.assertEqual(result.probes_attempted, 2) 
 
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
-    @patch('venues.polymarket_discovery.parse_gamma_yes_no_tokens')
-    @patch('venues.polymarket_discovery.probe_clob_readiness')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.parse_gamma_yes_no_tokens')
+    @patch('polymarket.clob_readiness.probe_clob_readiness')
     def test_pipeline_fail_closed_no_ready(self, mock_probe, mock_parse, mock_discover):
         mock_discover.return_value = [MOCK_GOOD_MARKET]
         mock_parse.return_value = (True, "yes_fail", "no_fail", FailureReason.OK)
@@ -118,7 +118,7 @@ class TestDiscoveryPipeline(unittest.TestCase):
         self.assertEqual(result.failure_reason, FailureReason.NO_READY_CANDIDATES)
         self.assertEqual(result.probes_attempted, 1)
 
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
     def test_no_eligible_candidates(self, mock_discover):
         mock_discover.return_value = [MOCK_BAD_FILTER_MARKET] # Filtered out
         
@@ -129,9 +129,9 @@ class TestDiscoveryPipeline(unittest.TestCase):
         self.assertEqual(result.skipped_count, 1)
         self.assertEqual(result.probes_attempted, 0)
         
-    @patch('venues.polymarket_discovery.discover_gamma_candidates')
-    @patch('venues.polymarket_discovery.parse_gamma_yes_no_tokens')
-    @patch('venues.polymarket_discovery.probe_clob_readiness')
+    @patch('polymarket.clob_readiness.discover_gamma_candidates')
+    @patch('polymarket.clob_readiness.parse_gamma_yes_no_tokens')
+    @patch('polymarket.clob_readiness.probe_clob_readiness')
     def test_legacy_wrapper(self, mock_probe, mock_parse, mock_discover):
         mock_discover.return_value = [MOCK_GOOD_MARKET]
         mock_parse.return_value = (True, "yes_123", "no_456", FailureReason.OK)

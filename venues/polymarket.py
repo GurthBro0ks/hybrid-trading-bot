@@ -183,6 +183,18 @@ def parse_polymarket_book(data: dict, *, ts: Optional[float] = None) -> VenueBoo
 
 def fetch_polymarket_venuebook(market: str, *, timeout_s: float = 5.0) -> VenueBook:
     ts_val = time.time()
+
+    # Check for fixture mode via env
+    if os.environ.get("POLYMARKET_FIXTURE_MODE") == "1":
+         # Load from ok_book.json
+         import json
+         from pathlib import Path
+         fix_path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "polymarket" / "ok_book.json"
+         if fix_path.exists():
+             with open(fix_path, 'r') as f:
+                 raw = json.load(f)
+                 return parse_polymarket_book(raw, ts=ts_val)
+
     try:
         raw = fetch_book(market, timeout_s=timeout_s)
     except PolymarketFetchError:

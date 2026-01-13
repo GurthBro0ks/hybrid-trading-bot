@@ -1,0 +1,16 @@
+{
+  "decision": "NO_TRADE",
+  "edge_bps": 0.0,
+  "fair_yes_prob": null,
+  "last_error": "",
+  "last_refresh": "2026-01-12T03:48:57.450011+00:00",
+  "market": "KALSHI-TEST-DEEP",
+  "mode": "SHADOW",
+  "notes": "",
+  "pm_yes_mid": null,
+  "reason": "NO_DATA",
+  "run_id": "20260112_034857",
+  "schema_version": "shadow_summary_v1",
+  "strategy": "stale_edge_enhanced",
+  "subreason": ""
+}

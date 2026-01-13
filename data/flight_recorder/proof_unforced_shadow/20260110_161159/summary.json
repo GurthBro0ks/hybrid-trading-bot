@@ -1,0 +1,20 @@
+{
+  "timestamp": "20260110_161159",
+  "targets": [
+    {
+      "ticker": "KXBTCMINY-27JAN01-78000.00",
+      "status": "DONE",
+      "verify": "PASS",
+      "stats": {
+        "entries": 0,
+        "exits": 0,
+        "no_trades": 100,
+        "reasons": {
+          "BOOK_SANITY": 1,
+          "THIN_BOOK": 99
+        }
+      }
+    }
+  ],
+  "overall_status": "PASS"
+}

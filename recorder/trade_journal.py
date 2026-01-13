@@ -1,32 +1,51 @@
-"""STUB_ONLY: Compatibility shim for SHADOW runner import graph.
-
-Must remain read-only and must not place orders or make authenticated network calls.
-"""
+"""Decision journaling for stale-edge strategy."""
 
 from __future__ import annotations
 
 import csv
 import os
-from pathlib import Path
-from typing import Any, Dict
+from typing import Dict, List
 
-from .journal_schema import JOURNAL_COLUMNS, normalize_row_for_csv
+
+COLUMNS: List[str] = [
+    "ts",
+    "market_id",
+    "now",
+    "market_end_ts",
+    "official_mid",
+    "official_source",
+    "official_age_ms",
+    "book_source",
+    "book_latency_ms",
+    "book_http_status",
+    "book_missing_reason",
+    "yes_bid",
+    "yes_ask",
+    "no_bid",
+    "no_ask",
+    "book_age_ms",
+    "mock_used",
+    "implied_yes",
+    "implied_no",
+    "fair_up_prob",
+    "edge_yes",
+    "edge_no",
+    "action",
+    "reason",
+    "params_hash",
+]
 
 
 class TradeJournal:
-    """Append-only CSV journal with a stable header."""
-
     def __init__(self, path: str) -> None:
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-    def record_decision(self, row: Dict[str, Any]) -> None:
-        normalized = normalize_row_for_csv(row)
-        write_header = not self.path.exists() or self.path.stat().st_size == 0
-        with self.path.open("a", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=JOURNAL_COLUMNS)
-            if write_header:
+        self.path = path
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if not os.path.exists(path):
+            with open(path, "w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=COLUMNS)
                 writer.writeheader()
-            writer.writerow(normalized)
-            handle.flush()
-            os.fsync(handle.fileno())
+
+    def record_decision(self, row: Dict[str, object]) -> None:
+        with open(self.path, "a", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=COLUMNS)
+            writer.writerow({key: row.get(key, "") for key in COLUMNS})

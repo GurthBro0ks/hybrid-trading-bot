@@ -1,0 +1,11 @@
+{
+  "market": "pm-ok",
+  "bids": [
+    {"price": "0.45", "size": "80"},
+    {"price": "0.44", "size": "70"}
+  ],
+  "asks": [
+    {"price": "0.46", "size": "90"},
+    {"price": "0.47", "size": "60"}
+  ]
+}

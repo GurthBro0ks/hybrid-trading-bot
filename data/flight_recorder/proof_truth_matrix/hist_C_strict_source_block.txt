@@ -1,0 +1,2 @@
+=== Histogram for C_strict_source_block ===
+UNSUPPORTED_RULES	18

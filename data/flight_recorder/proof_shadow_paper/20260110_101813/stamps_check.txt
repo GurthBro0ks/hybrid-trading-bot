@@ -1,0 +1,4 @@
+PASS: All truth stamps found.
+- DATA:LIVE: FOUND
+- EXEC:PAPER: FOUND
+- BOOK_SHA1:: FOUND

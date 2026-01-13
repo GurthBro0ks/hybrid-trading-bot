@@ -1,0 +1,9 @@
+{
+  "ticker": "KALSHI-SPREAD-WIDE",
+  "yes_bid": [
+    [30, 200]
+  ],
+  "no_bid": [
+    [50, 200]
+  ]
+}

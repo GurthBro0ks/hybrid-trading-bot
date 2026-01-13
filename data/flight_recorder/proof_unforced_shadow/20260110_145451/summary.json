@@ -1,0 +1,20 @@
+{
+  "timestamp": "20260110_145451",
+  "targets": [
+    {
+      "ticker": "KXBTCMAXY-26DEC31-119999.99",
+      "status": "DONE",
+      "verify": "PASS",
+      "stats": {
+        "entries": 0,
+        "exits": 0,
+        "no_trades": 49,
+        "reasons": {
+          "BOOK_SANITY": 1,
+          "THIN_BOOK": 48
+        }
+      }
+    }
+  ],
+  "overall_status": "PASS"
+}

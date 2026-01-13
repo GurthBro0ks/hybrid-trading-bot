@@ -1,0 +1,20 @@
+{
+  "timestamp": "20260110_161816",
+  "targets": [
+    {
+      "ticker": "KXBTCMAX100-26-APR",
+      "status": "DONE",
+      "verify": "PASS",
+      "stats": {
+        "entries": 0,
+        "exits": 0,
+        "no_trades": 51,
+        "reasons": {
+          "BOOK_SANITY": 1,
+          "THIN_BOOK": 50
+        }
+      }
+    }
+  ],
+  "overall_status": "PASS"
+}

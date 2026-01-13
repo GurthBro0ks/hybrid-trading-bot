@@ -1,0 +1,11 @@
+{
+  "market": "pm-spread-wide",
+  "bids": [
+    {"price": "0.40", "size": "80"},
+    {"price": "0.39", "size": "40"}
+  ],
+  "asks": [
+    {"price": "0.50", "size": "80"},
+    {"price": "0.51", "size": "40"}
+  ]
+}

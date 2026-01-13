@@ -1,0 +1,8 @@
+{
+  "ticker": "KXMVESPORTSMULTIGAMEEXTENDED-S2025D037B11AEB0-210384C2A59",
+  "total_rows": 109,
+  "reasons": {
+    "STRATEGY_ERROR:StaleEdgeStrategy.evaluate_market() missing 4 required positional arguments: 'token_id', 'rules_text', 'market_end_ts_ms', and 'now_ts_ms'": 109
+  },
+  "survival_sec": 247.546
+}

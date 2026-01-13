@@ -1,0 +1,3 @@
+=== Kalshi Venue Smoke Test (Ticker: Scanning Kalshi Series (category=crypto, grep='BTC) ===
+Testing: GET /markets/Scanning Kalshi Series (category=crypto, grep='BTC
+FAIL: Could not fetch market Scanning Kalshi Series (category=crypto, grep='BTC: {'error': "HTTP 404: {'error': {'code': 'not_found', 'message': 'not found', 'service': 'query-exchange'}}"}

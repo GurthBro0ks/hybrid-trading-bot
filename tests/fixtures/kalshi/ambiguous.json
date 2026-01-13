@@ -1,0 +1,9 @@
+{
+  "ticker": "KALSHI-AMBIGUOUS",
+  "yes_bid": [
+    [0.47, 100]
+  ],
+  "no_bid": [
+    [52, 100]
+  ]
+}

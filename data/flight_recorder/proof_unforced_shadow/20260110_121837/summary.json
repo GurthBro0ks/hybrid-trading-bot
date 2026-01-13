@@ -1,0 +1,20 @@
+{
+  "timestamp": "20260110_121837",
+  "targets": [
+    {
+      "ticker": "KXBTC15M-26JAN100730-30",
+      "status": "DONE",
+      "verify": "PASS",
+      "stats": {
+        "entries": 0,
+        "exits": 0,
+        "no_trades": 276,
+        "reasons": {
+          "BOOK_SANITY": 1,
+          "UNSUPPORTED_RULES": 275
+        }
+      }
+    }
+  ],
+  "overall_status": "PASS"
+}

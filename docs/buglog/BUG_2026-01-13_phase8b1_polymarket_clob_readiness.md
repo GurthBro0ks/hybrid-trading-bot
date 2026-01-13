@@ -31,7 +31,7 @@ Gamma active markets do not always have an initialized CLOB orderbook. Probing `
 
 Output:
 
-```
+```text
 134 passed in 0.99s
 ```
 
@@ -43,7 +43,7 @@ python3 scripts/verify_shadow_pipeline.py --fixture-mode --known-ready-market 0x
 
 Output:
 
-```
+```text
 20:10:13 [INFO] FIXTURE MODE ENABLED
 20:10:13 [INFO] Starting discovery...
 20:10:13 [INFO] Discovered: 1 READY, 0 NOT_READY
@@ -63,7 +63,7 @@ RESULT=PASS selected_market_id=0x123 selected_token_id=0x456 venuebook=OK ready_
 
 Output:
 
-```
+```text
 Starting tripwire scan...
 Using ripgrep (rg)...
 OK_NO_SECRETS_MATCHED

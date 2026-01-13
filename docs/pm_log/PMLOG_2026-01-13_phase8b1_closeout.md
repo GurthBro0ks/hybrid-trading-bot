@@ -4,7 +4,7 @@
 - **Phase**: 8B.1
 - **Branch**: phase8b.1-clob-readiness
 - **PR**: PR #5
-- **Merge SHA**: [To be filled after merge]
+- **Merge SHA**: 523b37c35faae50336db001cb37cec8fb2720de6
 - **Summary**: Polymarket CLOB readiness probing + deterministic candidate selection + centralized enums + offline fixtures/tests + CI fix for jq nulls + tripwire refinement.
 - **Proof (RESULT=PASS)**:
   - Tripwire: PASS (No secrets; updated with patterns from Phase 8C merge)

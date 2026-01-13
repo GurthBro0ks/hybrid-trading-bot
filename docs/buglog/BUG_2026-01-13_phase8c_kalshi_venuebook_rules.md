@@ -63,6 +63,9 @@ This proof run uses fixture inputs via --fixture-meta/--fixture-book for determi
 
 **CLI Proof (from `--help`):**
 
+> [!NOTE]
+> **Artifact Contract**: Fixture runs (like this proof) write `artifacts/shadow/journal_kalshi.csv` and other venue-specific files. Canonical artifacts like `latest_summary.json` and `latest_journal.csv` are owned by the live timer-run pipeline and are NOT updated by fixture runs to preserve live state integrity.
+
 ```text
 options:
   -h, --help            show this help message and exit

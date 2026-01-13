@@ -207,7 +207,7 @@ def discover_and_filter_candidates(max_candidates: int = 10) -> Dict[str, List[A
         if not market_id or not token_id:
              not_ready.append({
                 "candidate": cand, 
-                "reason": "MISSING_ID_OR_TOKEN"
+                "reason": "MISSING_ID_OR_TKN"
             })
              continue
 

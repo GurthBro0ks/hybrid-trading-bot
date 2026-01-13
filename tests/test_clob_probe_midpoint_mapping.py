@@ -2,12 +2,14 @@ import unittest
 from unittest.mock import patch, MagicMock
 import json
 import os
+from pathlib import Path
 from polymarket.clob_readiness import probe_clob_readiness
 from polymarket.contract import ReadinessStatus, FailureReason
 
 class TestClobProbeMidpointMapping(unittest.TestCase):
     def setUp(self):
-        self.fixture_dir = "/opt/pm_updown_bot_bundle/tests/fixtures/polymarket"
+        self.root = Path(__file__).resolve().parents[1]
+        self.fixture_dir = self.root / "tests" / "fixtures" / "polymarket"
         # Clear cache between tests if necessary, but here we can just use unique token_ids
         from polymarket.clob_readiness import _probe_cache
         _probe_cache.clear()

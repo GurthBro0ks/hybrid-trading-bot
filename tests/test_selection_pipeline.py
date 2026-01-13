@@ -2,12 +2,14 @@ import unittest
 from unittest.mock import patch, MagicMock
 import json
 import os
+from pathlib import Path
 from venues.polymarket_discovery import select_best_clob_candidate, SelectionResult
 from polymarket.contract import ReadinessStatus, FailureReason
 
 class TestSelectionPipeline(unittest.TestCase):
     def setUp(self):
-        self.fixture_dir = "/opt/pm_updown_bot_bundle/tests/fixtures/polymarket"
+        self.root = Path(__file__).resolve().parents[1]
+        self.fixture_dir = self.root / "tests" / "fixtures" / "polymarket"
         from polymarket.clob_readiness import _probe_cache
         _probe_cache.clear()
 

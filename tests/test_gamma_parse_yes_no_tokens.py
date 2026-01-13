@@ -1,12 +1,14 @@
 import unittest
 import json
 import os
+from pathlib import Path
 from polymarket.clob_readiness import parse_gamma_yes_no_tokens
 from polymarket.contract import FailureReason
 
 class TestGammaParseYesNoTokens(unittest.TestCase):
     def setUp(self):
-        self.fixture_dir = "/opt/pm_updown_bot_bundle/tests/fixtures/polymarket"
+        self.root = Path(__file__).resolve().parents[1]
+        self.fixture_dir = self.root / "tests" / "fixtures" / "polymarket"
 
     def _load_fixture(self, name):
         path = os.path.join(self.fixture_dir, name)

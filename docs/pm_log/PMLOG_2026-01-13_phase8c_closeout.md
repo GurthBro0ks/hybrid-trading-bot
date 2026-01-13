@@ -9,4 +9,4 @@
   - Smoke: PASS
   - Shadow Runner: PASS (Journal Emitted)
   - PROOF_DIR: /tmp/proof_phase8c_kalshi_20260113T170348Z
-- **Merge SHA**: (Pending)
+- **Merge SHA**: 168eec55504a140f8ff607e4ce1e03a62542350c

@@ -59,6 +59,8 @@ python3 scripts/run_shadow_stale_edge.py \
   --fixture-book tests/fixtures/kalshi/ok_book.json
 ```
 
+This proof run uses fixture inputs via --fixture-meta/--fixture-book for deterministic offline verification.
+
 **CLI Proof (from `--help`):**
 
 ```text
@@ -81,6 +83,23 @@ find artifacts/shadow -type f -mmin -5 -print | sort
 
 ```text
 artifacts/shadow/journal_kalshi.csv
+```
+
+Command:
+
+```bash
+ls -lt artifacts/shadow | head
+```
+
+Output:
+
+```text
+total 136
+-rw-rw-r-- 1 slimy slimy 16849 Jan 13 16:54 journal_kalshi.csv
+-rw------- 1 slimy slimy   368 Jan 12 03:48 health.json
+-rw------- 1 slimy slimy   386 Jan 12 03:48 latest_summary.json
+-rw------- 1 slimy slimy  1026 Jan 12 03:48 latest_journal.csv
+-rw-r--r-- 1 slimy slimy 96770 Jan 12 03:48 flight_recorder.csv
 ```
 
 Output (Artifacts):

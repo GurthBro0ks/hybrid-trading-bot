@@ -42,7 +42,7 @@ BOOK_PARSE=OK depth=600.0
 RESULT=PASS
 ```
 
-*Exit Code: 0*
+#### Exit Code: 0
 
 ### 3. Shadow Runner Artifacts (Kalshi)
 
@@ -53,10 +53,24 @@ python3 scripts/run_shadow_stale_edge.py \
   --venue kalshi \
   --market KXBTC-25DEC31 \
   --minutes 1 \
-  --loop-interval-sec 60 \
+  --loop-interval-sec 1 \
   --output artifacts/shadow/journal_kalshi.csv \
   --fixture-meta tests/fixtures/kalshi/market_metadata.json \
   --fixture-book tests/fixtures/kalshi/ok_book.json
+```
+
+**CLI Proof (from `--help`):**
+
+```text
+options:
+  -h, --help            show this help message and exit
+  --venue {polymarket,kalshi}
+  --market MARKET_ID_CLI
+  --minutes MINUTES
+  --loop-interval-sec LOOP_INTERVAL_SEC
+  --output OUTPUT
+  --fixture-meta FIXTURE_META
+  --fixture-book FIXTURE_BOOK
 ```
 
 Evidence (Files Updated):
@@ -73,15 +87,16 @@ Output (Artifacts):
 `artifacts/shadow/journal_kalshi.csv` (Sample):
 
 ```csv
-ts,market_id,now,official_mid,official_source,book_source,yes_bid,yes_ask,action,reason
-1768323022247,KXBTC-25DEC31,1768323022247,93658.005,coinbase,kalshi,0.47,0.48,NO_TRADE,MODEL_WARMUP
+ts,market_id,now,official_mid,official_source,book_source,yes_bid,yes_ask,action
+1768323022247,KXBTC-25DEC31,1768323022247,93658.005,coinbase,kalshi,0.47,0.48,NO_TRADE
+1768323073405,KXBTC-25DEC31,1768323073405,93638.035,coinbase,kalshi,0.47,0.48,NO_TRADE
 ```
 
-*Note: `NO_TRADE` reason=`MODEL_WARMUP`.*
+*Note: `NO_TRADE` reason=MODEL_WARMUP (exact reason emitted in journal).*
 
 ### 4. Tripwire (No Secrets)
 
-*(Fallback - repo has no dedicated script yet)*
+(Fallback - repo has no dedicated script yet)
 
 Command:
 

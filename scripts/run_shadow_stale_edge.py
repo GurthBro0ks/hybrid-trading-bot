@@ -20,6 +20,9 @@ from strategies.reasons import ReasonCode
 from strategies.stale_edge import BookTop, Decision, StaleEdgeStrategy
 from venuebook.types import BookStatus
 from venues.polymarket import fetch_polymarket_venuebook
+from venues.kalshi import fetch_kalshi_venuebook
+from venues.kalshi_fetch import fetch_market
+from eligibility.kalshi_rules import check_kalshi_eligibility, is_market_open, EligibilityResult
 
 
 logger = logging.getLogger("stale_edge_shadow")
@@ -116,7 +119,7 @@ def main() -> int:
     parser.add_argument("--minutes", type=int, default=1)
     parser.add_argument("--mode", choices=["live", "sim"], default="live")
     parser.add_argument("--loop-interval-sec", type=float, default=1.0)
-    parser.add_argument("--venue", choices=["polymarket"], default=None)
+    parser.add_argument("--venue", choices=["polymarket", "kalshi"], default=None)
     parser.add_argument("--market", dest="market_id_cli", default=None)
     parser.add_argument("--market-id", default="pm-demo-market")
     parser.add_argument(
@@ -131,9 +134,37 @@ def main() -> int:
         "--output",
         default="data/flight_recorder/stale_edge_decisions.csv",
     )
+    parser.add_argument("--fixture-meta", help="Path to market metadata json fixture")
+    parser.add_argument("--fixture-book", help="Path to orderbook json fixture")
     args = parser.parse_args()
 
     market_id = args.market_id_cli or args.market_id
+
+    # Mocking if fixtures provided (Copied from smoke_kalshi_book.py)
+    if args.fixture_meta or args.fixture_book:
+        import json
+        from unittest.mock import MagicMock, patch
+        
+        def mock_get(url, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            
+            # Order matters: check orderbook first to avoid 'markets' substring collision
+            if "orderbook" in url and args.fixture_book:
+                with open(args.fixture_book) as f:
+                    data = json.load(f)
+                mock_resp.json.return_value = data
+            elif "markets" in url and args.fixture_meta:
+                with open(args.fixture_meta) as f:
+                    data = json.load(f)
+                mock_resp.json.return_value = {"market": data}
+            else:
+                mock_resp.status_code = 404
+            return mock_resp
+
+        p = patch("requests.get", side_effect=mock_get)
+        p.start()
+        logger.info("Running with FIXTURES (requests.get mocked)")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -144,10 +175,44 @@ def main() -> int:
     cancel_limiter = RateLimiter(rules.max_cancel_replace_per_min)
     exposure = ExposureTracker()
 
-    metadata = {"rules_text": args.rules_text}
-    source = resolution_source_from_metadata(metadata)
-    if is_unknown(source):
-        logger.error("RESOLUTION_SOURCE_UNKNOWN")
+    # Metadata & Eligibility
+    source = None
+    market_close_ts = None
+    
+    if args.venue == "kalshi":
+        # 1. Fetch Metadata
+        try:
+            meta = fetch_market(market_id)
+            # 2. Check Eligibility
+            res, src_res = check_kalshi_eligibility(meta)
+            if res != EligibilityResult.ELIGIBLE:
+                logger.error(f"KALSHI_NOT_ELIGIBLE: {res.name}")
+                return 1
+            if src_res is None:
+                logger.error("KALSHI_RESOLUTION_SOURCE_UNKNOWN")
+                return 1
+            source = src_res
+            
+            # Parse close time for time gating
+            try:
+                ct_str = meta.get("close_time", "")
+                if ct_str.endswith('Z'):
+                    ct_str = ct_str[:-1] + '+00:00'
+                from datetime import datetime
+                market_close_ts = datetime.fromisoformat(ct_str).timestamp()
+            except Exception:
+                logger.error("KALSHI_CLOSE_TIME_PARSE_ERROR")
+                return 1
+                
+        except Exception as e:
+            logger.error(f"KALSHI_METADATA_FETCH_FAILED: {e}")
+            return 1
+    else:
+        # Polymarket / Default fallback
+        metadata = {"rules_text": args.rules_text}
+        source = resolution_source_from_metadata(metadata)
+        if is_unknown(source):
+            logger.error("RESOLUTION_SOURCE_UNKNOWN")
 
     market_end_ts_ms = (
         args.market_end_ts * 1000
@@ -172,6 +237,15 @@ def main() -> int:
         official_mid = None
         official_ts_ms = None
         source_name = "NONE"
+
+        # Time Gating (Kalshi only for now, or generic if we had close ts for PM)
+        if args.venue == "kalshi" and market_close_ts is not None:
+             if not is_market_open(now_ms/1000.0, market_close_ts):
+                 logger.info("MARKET_CLOSED")
+                 # We can either break or just record decision MARKET_CLOSED
+                 # For shadow runner, maybe just log and wait? 
+                 # Or treat as NO_TRADE.
+                 pass
 
         if not is_unknown(source) and not args.force_feed_failure:
             feed = get_official_price(symbol_pair=source.symbol)
@@ -209,7 +283,51 @@ def main() -> int:
             mock_used = True
         else:
             # LIVE MODE: prohibit mocks.
-            if args.venue == "polymarket":
+            if args.venue == "kalshi":
+                if market_close_ts is not None and not is_market_open(now_ms/1000.0, market_close_ts):
+                    book_missing_reason = "MARKET_CLOSED"
+                else:
+                    book_source = "kalshi"
+                    t0 = time.time()
+                    try:
+                        vbook = fetch_kalshi_venuebook(market_id)
+                        book_latency_ms = int((time.time() - t0) * 1000)
+                        book_http_status = 200 if vbook.status == BookStatus.OK else None
+                        
+                        if vbook.status == BookStatus.OK:
+                            # VenueBook to BookTop
+                            # Kalshi is naturally YES/NO binary.
+                            book = BookTop(
+                                yes_bid=vbook.best_bid,
+                                yes_ask=vbook.best_ask,
+                                no_bid=None,
+                                no_ask=None,
+                                ts_ms=now_ms
+                            )
+                            # Derive implicit sides (Kalshi usually gives both, but BookTop struct is weird)
+                            # We'll fill what we have.
+                            # Actually, Kalshi VenueBook should have NO side if it's there.
+                            # But VenueBook types only has best_bid/best_ask which are typically for the primary contract (YES).
+                            # If we want NO prices, we need to check if VenueBook supports it.
+                            # Looking at venues/kalshi_fetch.py and venues/kalshi.py...
+                            # venues/kalshi.py parse_kalshi_book returns best_bid/best_ask from YES side (or derived from NO).
+                            # It doesn't explicitly return NO side prices in the top level fields.
+                            # So we do strict complement 1 - yes.
+                            if book.yes_bid is not None:
+                                book.no_ask = 1.0 - book.yes_bid
+                            if book.yes_ask is not None:
+                                book.no_bid = 1.0 - book.yes_ask
+                        else:
+                            book_missing_reason = (
+                                vbook.fail_reason.name if vbook.fail_reason is not None else "UNKNOWN"
+                            )
+                            logger.error(f"BOOK_FETCH_FAILED: {book_missing_reason}")
+                            
+                    except Exception as e:
+                        book_missing_reason = "PARSE_ERROR"
+                        logger.error(f"BOOK_PARSE_FAILED: {str(e)}")
+
+            elif args.venue == "polymarket":
                 book_source = "polymarket"
                 t0 = time.time()
                 try:
@@ -331,11 +449,11 @@ def main() -> int:
                 "book_latency_ms": book_latency_ms or "",
                 "book_http_status": book_http_status or "",
                 "book_missing_reason": book_missing_reason or "",
-                "pm_yes_bid": book.yes_bid if book else "",
-                "pm_yes_ask": book.yes_ask if book else "",
-                "pm_no_bid": book.no_bid if book else "",
-                "pm_no_ask": book.no_ask if book else "",
-                "pm_book_age_ms": book_age_ms if book else "",
+                "yes_bid": book.yes_bid if book else "",
+                "yes_ask": book.yes_ask if book else "",
+                "no_bid": book.no_bid if book else "",
+                "no_ask": book.no_ask if book else "",
+                "book_age_ms": book_age_ms if book else "",
                 "mock_used": str(mock_used).lower(),
                 "implied_yes": decision.implied_yes or "",
                 "implied_no": decision.implied_no or "",

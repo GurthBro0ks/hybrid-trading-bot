@@ -4,6 +4,7 @@
 //! Implements Replay (from DB) and MockWS (with reconnect)
 
 pub mod realws;
+pub mod venuebook;
 pub mod ws_sources;
 
 use crate::config::{EngineConfig, IngestMode};
@@ -70,7 +71,9 @@ pub async fn run_ingest_task(
             }
         }
         IngestMode::MockWs => {
-            let url = config.ws_url.unwrap_or_else(|| "ws://localhost:9001".to_string());
+            let url = config
+                .ws_url
+                .unwrap_or_else(|| "ws://localhost:9001".to_string());
             run_mock_ws(
                 symbol,
                 url,
@@ -83,14 +86,7 @@ pub async fn run_ingest_task(
             .await
         }
         IngestMode::RealWs => {
-            realws::run_real_ws(
-                symbol,
-                config,
-                tick_tx,
-                persist_tx,
-                metrics,
-                shutdown,
-            ).await
+            realws::run_real_ws(symbol, config, tick_tx, persist_tx, metrics, shutdown).await
         }
     }
 }
@@ -257,20 +253,24 @@ async fn run_replay_db(
     mut shutdown: tokio::sync::broadcast::Receiver<()>,
     replay_done: Option<oneshot::Sender<()>>,
 ) {
-    info!(mode = "REPLAY", sample_every = sample_every, "ingest task started");
+    info!(
+        mode = "REPLAY",
+        sample_every = sample_every,
+        "ingest task started"
+    );
 
     let mut offset = 0;
     let limit = 1000;
     let mut sequence = 0u64;
-    
+
     loop {
         if shutdown.try_recv().is_ok() {
-             info!("replay received shutdown");
-             break;
+            info!("replay received shutdown");
+            break;
         }
 
         let rows = sqlx::query_as::<_, (i64, String, f64, f64, i64)>(
-            "SELECT id, symbol, price, volume, ts FROM ticks ORDER BY ts ASC LIMIT ? OFFSET ?"
+            "SELECT id, symbol, price, volume, ts FROM ticks ORDER BY ts ASC LIMIT ? OFFSET ?",
         )
         .bind(limit)
         .bind(offset)
@@ -283,31 +283,31 @@ async fn run_replay_db(
                     info!("replay finished (no more ticks)");
                     break;
                 }
-                
+
                 for (_id, sym, price, vol, ts) in ticks {
-                     if shutdown.try_recv().is_ok() {
-                         break; 
-                     }
-                     
-                     metrics.ingest_received.fetch_add(1, Ordering::Relaxed);
-                     sequence += 1;
-                     if sequence % sample_every != 0 {
-                         continue;
-                     }
-                     
-                     let tick = Tick {
-                         event_id: EventId::new(),
-                         symbol: sym,
-                         price,
-                         volume: vol,
-                         ts,
-                     };
-                     
-                     send_tick(tick, &tick_tx, &persist_tx, &metrics).await;
-                     metrics.tick_count.fetch_add(1, Ordering::Relaxed);
-                     metrics.ingest_processed.fetch_add(1, Ordering::Relaxed);
-                     
-                     tokio::task::yield_now().await;
+                    if shutdown.try_recv().is_ok() {
+                        break;
+                    }
+
+                    metrics.ingest_received.fetch_add(1, Ordering::Relaxed);
+                    sequence += 1;
+                    if sequence % sample_every != 0 {
+                        continue;
+                    }
+
+                    let tick = Tick {
+                        event_id: EventId::new(),
+                        symbol: sym,
+                        price,
+                        volume: vol,
+                        ts,
+                    };
+
+                    send_tick(tick, &tick_tx, &persist_tx, &metrics).await;
+                    metrics.tick_count.fetch_add(1, Ordering::Relaxed);
+                    metrics.ingest_processed.fetch_add(1, Ordering::Relaxed);
+
+                    tokio::task::yield_now().await;
                 }
                 offset += limit;
             }
@@ -345,7 +345,7 @@ async fn run_mock_ws(
             Ok((ws_stream, _)) => {
                 info!("connected to mock ws");
                 let (mut write, mut read) = ws_stream.split();
-                
+
                 let mut ping_timer = interval(Duration::from_secs(5));
                 let mut last_activity = tokio::time::Instant::now();
 
@@ -353,13 +353,13 @@ async fn run_mock_ws(
                     tokio::select! {
                          _ = shutdown.recv() => {
                              info!("shutdown requested");
-                             return; 
+                             return;
                          }
                          _ = ping_timer.tick() => {
                              if last_activity.elapsed() > Duration::from_secs(5) {
                                  if let Err(e) = write.send(Message::Ping(vec![])).await {
                                      warn!("failed to send ping: {}", e);
-                                     break; 
+                                     break;
                                  }
                              }
                          }
@@ -417,14 +417,18 @@ pub(crate) async fn send_tick(
     metrics: &Arc<Metrics>,
 ) {
     if tick_tx.try_send(tick.clone()).is_err() {
-        metrics.backpressure_drops_tick.fetch_add(1, Ordering::Relaxed);
+        metrics
+            .backpressure_drops_tick
+            .fetch_add(1, Ordering::Relaxed);
         error!(reason = "OVERLOAD", "tick channel full, exiting 13");
         // G5: Deterministic overload handling -> Exit 13
         std::process::exit(13);
     }
     if persist_tx.try_send(PersistEvent::Tick(tick)).is_err() {
-        metrics.backpressure_drops_persist.fetch_add(1, Ordering::Relaxed);
-        // Persist channel full is bad but maybe not fatal? 
+        metrics
+            .backpressure_drops_persist
+            .fetch_add(1, Ordering::Relaxed);
+        // Persist channel full is bad but maybe not fatal?
         // Prompt says "Backpressure (channel full ... saturated) -> exit 13"
         // Let's being strict.
         error!(reason = "OVERLOAD", "persist channel full, exiting 13");

@@ -258,13 +258,8 @@ async fn main() -> Result<()> {
 
     // Spawn strategy task
     let strategy_handle = tokio::spawn(async move {
-        strategy::run_strategy_task(
-            tick_rx,
-            signal_tx,
-            persist_tx_strategy,
-            metrics_strategy,
-        )
-        .await;
+        strategy::run_strategy_task(tick_rx, signal_tx, persist_tx_strategy, metrics_strategy)
+            .await;
     });
 
     // Spawn execution task

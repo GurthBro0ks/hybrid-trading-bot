@@ -93,9 +93,9 @@ impl Default for ChannelConfig {
 pub enum IngestMode {
     #[default]
     Synthetic, // Deterministic generator
-    Replay,    // From DB (ticks table)
-    MockWs,    // WebSocket (ws://localhost...)
-    RealWs,    // Real WebSocket ingestion (Option A)
+    Replay, // From DB (ticks table)
+    MockWs, // WebSocket (ws://localhost...)
+    RealWs, // Real WebSocket ingestion (Option A)
 }
 
 impl std::fmt::Display for IngestMode {

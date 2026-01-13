@@ -98,7 +98,6 @@ def main():
     
     # Fetch VenueBook
     logger.info("Fetching VenueBook...")
-    # In fixture mode, we should ensure fetch_polymarket_venuebook also handles it
     book = fetch_polymarket_venuebook(token_id)
     
     logger.info(f"VenueBook Status: {book.status}")

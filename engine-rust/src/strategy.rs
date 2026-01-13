@@ -1,8 +1,9 @@
 //! Strategy task - SMA crossover
 //!
 //! Implements S6 (backpressure) and S8 (determinism)
+//! Implements thin-book classification for VenueBook risk management
 
-use crate::types::{EventId, Metrics, PersistEvent, ReasonCode, Side, Signal, Tick};
+use crate::types::{EventId, Metrics, PersistEvent, ReasonCode, Side, Signal, Tick, VenueBook};
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -107,7 +108,11 @@ pub async fn run_strategy_task(
         prev_diff = Some(curr_diff);
 
         if emit {
-            let side = if action == "BUY" { Side::Buy } else { Side::Sell };
+            let side = if action == "BUY" {
+                Side::Buy
+            } else {
+                Side::Sell
+            };
             let signal = Signal {
                 event_id: EventId::new(),
                 symbol: tick.symbol.clone(),
@@ -152,6 +157,66 @@ pub async fn run_strategy_task(
         total_signals = metrics.signal_count.load(Ordering::Relaxed),
         "strategy task ended (tick channel closed)"
     );
+}
+
+// --- Thin-Book Classification ---
+
+/// Deterministic thresholds for thin-book detection
+/// These are constants to ensure test stability (no config-based nondeterminism)
+const THIN_BOOK_SPREAD_THRESHOLD: f64 = 5.0; // Spread > 5.0 is wide
+const THIN_BOOK_DEPTH_LEVELS: usize = 3; // Check top 3 levels
+const THIN_BOOK_DEPTH_THRESHOLD: f64 = 500.0; // Total qty < 500 is thin
+
+/// Classify orderbook for thin-book conditions
+///
+/// Returns (is_thin, subreason_code)
+/// - is_thin: true if book is too thin to trade
+/// - subreason_code: Optional reason string (matches ReasonCode)
+///
+/// # Deterministic Rules (Fail-Closed)
+/// 1. NO_BBO: Missing best bid OR best ask → (true, Some("NO_BBO"))
+/// 2. SPREAD_WIDE: Spread > THIN_BOOK_SPREAD_THRESHOLD → (true, Some("SPREAD_WIDE"))
+/// 3. DEPTH_BELOW_THRESHOLD: Total qty in top N levels < threshold → (true, Some("DEPTH_BELOW_THRESHOLD"))
+/// 4. Otherwise: (false, None)
+///
+/// # Errors
+/// - Returns Err if book is invalid (e.g., negative spread, NaN values)
+pub fn classify_thin_book(book: &VenueBook) -> anyhow::Result<(bool, Option<ReasonCode>)> {
+    // Rule 1: NO_BBO (missing best bid or ask)
+    let best_bid = book.best_bid();
+    let best_ask = book.best_ask();
+
+    if best_bid.is_none() || best_ask.is_none() {
+        return Ok((true, Some(ReasonCode::ThinBookNoBbo)));
+    }
+
+    let bid = best_bid.unwrap();
+    let ask = best_ask.unwrap();
+
+    // Validate no crossed book (fail-closed)
+    if bid >= ask {
+        anyhow::bail!("invalid book: crossed (bid {} >= ask {})", bid, ask);
+    }
+
+    let spread = ask - bid;
+
+    // Rule 2: SPREAD_WIDE
+    if spread > THIN_BOOK_SPREAD_THRESHOLD {
+        return Ok((true, Some(ReasonCode::ThinBookSpreadWide)));
+    }
+
+    // Rule 3: DEPTH_BELOW_THRESHOLD
+    // Check combined depth on both sides
+    let bid_depth = book.bid_depth(THIN_BOOK_DEPTH_LEVELS);
+    let ask_depth = book.ask_depth(THIN_BOOK_DEPTH_LEVELS);
+    let total_depth = bid_depth + ask_depth;
+
+    if total_depth < THIN_BOOK_DEPTH_THRESHOLD {
+        return Ok((true, Some(ReasonCode::ThinBookDepthBelowThreshold)));
+    }
+
+    // Not thin
+    Ok((false, None))
 }
 
 #[cfg(test)]

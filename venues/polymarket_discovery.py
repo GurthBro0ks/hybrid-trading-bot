@@ -4,7 +4,7 @@ Lightweight wrapper around polymarket.clob_readiness for backward compatibility.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from polymarket.clob_readiness import (
     ReadinessStatus,

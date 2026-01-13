@@ -3,8 +3,8 @@
 - **Date/Time UTC**: 2026-01-13T17:15:00Z
 - **Phase**: 8C
 - **Branch**: phase8b.2-test-gate
-- **PR**: PR #4
-- **Merge SHA**: 168eec55504a140f8ff607e4ce1e03a62542350c
+- **PR**: PR #4 (Verified against merge SHA `b27de2b` via GitHub API on 2026-01-13)
+- **Merge SHA**: b27de2bca960b2ae1c86df0544ba36ae14c2e59b
 - **Summary**: Kalshi VenueBook adapter + rules/eligibility gating + deterministic fixtures + repo tripwire script + artifact-contract clarification (fixture runs vs canonical latest_*).
 - **Proof (RESULT=PASS)**:
   - Tripwire: PASS (No secrets)

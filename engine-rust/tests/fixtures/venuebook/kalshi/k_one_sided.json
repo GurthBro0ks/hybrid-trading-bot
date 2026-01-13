@@ -1,0 +1,8 @@
+{
+  "ticker": "KALSHI-TEST-ONE-SIDED",
+  "yes_bid": [
+    [60, 800],
+    [59, 600]
+  ],
+  "no_bid": []
+}

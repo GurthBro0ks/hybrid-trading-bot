@@ -1,3 +1,4 @@
+use super::ws_sources::{WsSourceConfig, WsSourcesConfig};
 use crate::config::EngineConfig;
 use crate::types::{EventId, Metrics, PersistEvent, Tick};
 use futures::{SinkExt, StreamExt};
@@ -8,7 +9,6 @@ use tokio::time::{interval, sleep, Duration, Instant};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use tracing::{error, info, warn};
 use url::Url;
-use super::ws_sources::{WsSourceConfig, WsSourcesConfig};
 
 pub async fn run_real_ws(
     symbol: String,
@@ -21,45 +21,57 @@ pub async fn run_real_ws(
     info!(mode = "REAL_WS", "ingest task started");
 
     let config_path = "/opt/hybrid-trading-bot/config/ws_sources.toml";
-    
+
     // If config doesn't exist, we might be in a test env or need to fallback to example for dev convenience?
     // STRICT MODE: Fail if missing.
     let sources_config = match WsSourcesConfig::load(config_path) {
         Ok(c) => c,
         Err(e) => {
-             // Check if example exists and suggestion?
-             error!("Failed to load ws_sources.toml: {}. (Did you cp config/ws_sources.example.toml config/ws_sources.toml?)", e);
-             std::process::exit(12);
+            // Check if example exists and suggestion?
+            error!("Failed to load ws_sources.toml: {}. (Did you cp config/ws_sources.example.toml config/ws_sources.toml?)", e);
+            std::process::exit(12);
         }
     };
-    
+
     let mut sources = sources_config.source.clone();
     sources.sort_by_key(|s| s.priority);
-    
+
     if sources.is_empty() {
         error!("No sources defined in ws_sources.toml");
         std::process::exit(12);
     }
 
     loop {
-         if shutdown.try_recv().is_ok() { break; }
-         
-         for source in &sources {
-             // Pass config.sample_every
-             if run_source_session(source, &symbol, config.sample_every, &tick_tx, &persist_tx, &metrics, &mut shutdown).await {
-                 // graceful shutdown
-                 return; 
-             }
-             // Connection failed or lost, try next source
-             warn!(source=%source.name, "source disconnected or failed, switching...");
-         }
-         
-         // If we cycled through all sources, wait a bit before retrying from top
-         warn!("All sources failed, sleeping 5s...");
-         tokio::select! {
-             _ = sleep(Duration::from_secs(5)) => {},
-             _ = shutdown.recv() => { return; }
-         }
+        if shutdown.try_recv().is_ok() {
+            break;
+        }
+
+        for source in &sources {
+            // Pass config.sample_every
+            if run_source_session(
+                source,
+                &symbol,
+                config.sample_every,
+                &tick_tx,
+                &persist_tx,
+                &metrics,
+                &mut shutdown,
+            )
+            .await
+            {
+                // graceful shutdown
+                return;
+            }
+            // Connection failed or lost, try next source
+            warn!(source=%source.name, "source disconnected or failed, switching...");
+        }
+
+        // If we cycled through all sources, wait a bit before retrying from top
+        warn!("All sources failed, sleeping 5s...");
+        tokio::select! {
+            _ = sleep(Duration::from_secs(5)) => {},
+            _ = shutdown.recv() => { return; }
+        }
     }
 }
 
@@ -82,7 +94,7 @@ async fn run_source_session(
     };
 
     info!(source = %source.name, url = %source.url, sample_every = sample_every, "connecting...");
-    
+
     match connect_async(url).await {
         Ok((ws_stream, _)) => {
             info!(source = %source.name, "connected");
@@ -102,7 +114,7 @@ async fn run_source_session(
                         if last_activity.elapsed() > Duration::from_secs(20) {
                              // Send pings if idle
                             if let Err(_) = write.send(Message::Ping(vec![])).await {
-                                return false; 
+                                return false;
                             }
                         }
                     }
@@ -110,7 +122,7 @@ async fn run_source_session(
                         match msg {
                             Some(Ok(Message::Text(text))) => {
                                 last_activity = Instant::now();
-                                
+
                                 // Parser Logic
                                 if text.contains("\"type\":\"update\"") {
                                     // Gemini
@@ -199,10 +211,10 @@ fn parse_gemini_update(text: &str, symbol: &str) -> anyhow::Result<Vec<Tick>> {
         timestampms: i64,
         events: Vec<GEvent>,
     }
-    
+
     let u: GUpdate = serde_json::from_str(text)?;
     let mut ticks = Vec::new();
-    
+
     for event in u.events {
         if event.type_ == "trade" {
             if let (Some(price), Some(amount)) = (event.price, event.amount) {

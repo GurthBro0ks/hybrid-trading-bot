@@ -3,10 +3,11 @@
 ## Provenance
 
 - **Host**: NUC1
-- **Branch**: phase8b.2-test-gate
-- **HEAD**: d26e12e (baseline) + edits
-- **Python**: 3.12 (approx)
-- **Proof Run Time UTC**: 2026-01-13T16:38:00Z (approx)
+- **Branch**: `phase8b.2-test-gate` (hosting Phase 8C hardening changes)
+- **Commit**: `804a29b`
+- **Time**: `2026-01-13T16:46:27Z`
+- **Environment**: NUC1 (Python 3.12.3)
+- **Status**: CLEAN (no uncommitted code changes)
 
 ## Proof of Work
 
@@ -52,24 +53,35 @@ python3 scripts/run_shadow_stale_edge.py \
   --venue kalshi \
   --market KXBTC-25DEC31 \
   --minutes 1 \
-  --loop-interval-sec 1 \
+  --loop-interval-sec 60 \
   --output artifacts/shadow/journal_kalshi.csv \
   --fixture-meta tests/fixtures/kalshi/market_metadata.json \
   --fixture-book tests/fixtures/kalshi/ok_book.json
+```
+
+Evidence (Files Updated):
+
+```bash
+find artifacts/shadow -type f -mmin -5 -print | sort
+```
+
+```text
+artifacts/shadow/journal_kalshi.csv
 ```
 
 Output (Artifacts):
 `artifacts/shadow/journal_kalshi.csv` (Sample):
 
 ```csv
-ts,market_id,now,official_mid,official_source,book_source,pm_yes_bid,pm_yes_ask,action
-1768322288683,KXBTC-25DEC31,1768322288683,93501.905,coinbase,kalshi,0.47,0.48,NO_TRADE
-1768322289825,KXBTC-25DEC31,1768322289825,93537.995,coinbase,kalshi,0.47,0.48,NO_TRADE
+ts,market_id,now,official_mid,official_source,book_source,yes_bid,yes_ask,action,reason
+1768323022247,KXBTC-25DEC31,1768323022247,93658.005,coinbase,kalshi,0.47,0.48,NO_TRADE,MODEL_WARMUP
 ```
 
-*Note: `NO_TRADE` due to MODEL_WARMUP or SAFE_MODE, but artifacts are emitted and parsed correctly.*
+*Note: `NO_TRADE` reason=`MODEL_WARMUP`.*
 
 ### 4. Tripwire (No Secrets)
+
+*(Fallback - repo has no dedicated script yet)*
 
 Command:
 
